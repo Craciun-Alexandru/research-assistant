@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.egg-info/
+*.pyc
+.ruff_cache/
+.pytest_cache/
+
+# Data (large, regenerated daily)
+resources/
+
+# OpenClaw memory (agent-generated, ephemeral)
+memory/
+
+# Environment
+.env
+*.log
+.venv/
+venv/
