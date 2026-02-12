@@ -3,9 +3,9 @@
 Format digest JSON into Markdown for delivery.
 
 Usage:
-    python3 format_digest_markdown.py \\
-        --input digest_2026-02-04.json \\
-        --output digest_2026-02-04.md
+    python -m arxiv_digest.digest                    # Auto-detect digest_*.json in current/
+    python -m arxiv_digest.digest --input digest_2026-02-04.json
+    python -m arxiv_digest.digest --input digest_2026-02-04.json --output custom.md
 """
 
 import argparse
@@ -113,14 +113,26 @@ def generate_markdown(digest: dict) -> str:
 def main():
     parser = argparse.ArgumentParser(description="Format digest JSON to Markdown")
     parser.add_argument(
-        "--input", required=True, help="Input digest JSON file (e.g., digest_2026-02-04.json)"
+        "--input",
+        help="Input digest JSON file (default: auto-detect digest_*.json in current/)",
     )
     parser.add_argument("--output", help="Output Markdown file (default: replaces .json with .md)")
 
     args = parser.parse_args()
 
-    # Resolve paths — read/write inside today's daily run directory
-    input_path = CURRENT_RUN_DIR / args.input
+    # Resolve input path — auto-detect if not specified
+    if args.input:
+        input_path = CURRENT_RUN_DIR / args.input
+    else:
+        # Auto-detect digest_*.json in current directory
+        digest_files = list(CURRENT_RUN_DIR.glob("digest_*.json"))
+        if not digest_files:
+            print(f"Error: No digest_*.json files found in {CURRENT_RUN_DIR}")
+            sys.exit(1)
+        if len(digest_files) > 1:
+            print(f"Warning: Multiple digest files found, using {digest_files[0].name}")
+        input_path = digest_files[0]
+        print(f"Auto-detected input: {input_path.name}")
 
     output_path = CURRENT_RUN_DIR / args.output if args.output else input_path.with_suffix(".md")
 

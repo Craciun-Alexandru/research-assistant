@@ -3,9 +3,9 @@
 Deliver markdown digest via Discord using openclaw message send.
 
 Usage:
-    python3 deliver_digest_markdown.py \\
-        --input digest_2026-02-04.md \\
-        --discord-user YOUR_USER_ID
+    python -m arxiv_digest.deliver                   # Auto-detect digest_*.md in current/
+    python -m arxiv_digest.deliver --input digest_2026-02-04.md
+    python -m arxiv_digest.deliver --method split --discord-user YOUR_USER_ID
 """
 
 import argparse
@@ -166,7 +166,8 @@ Total size: {len(content):,} characters"""
 def main():
     parser = argparse.ArgumentParser(description="Deliver Markdown digest via Discord")
     parser.add_argument(
-        "--input", required=True, help="Input Markdown file (e.g., digest_2026-02-04.md)"
+        "--input",
+        help="Input Markdown file (default: auto-detect digest_*.md in current/)",
     )
     parser.add_argument("--discord-user", help="Discord user ID (or use DISCORD_USER_ID env var)")
     parser.add_argument(
@@ -185,8 +186,19 @@ def main():
         print("Set via --discord-user or DISCORD_USER_ID environment variable")
         sys.exit(1)
 
-    # Resolve path — read from today's daily run directory
-    input_path = CURRENT_RUN_DIR / args.input
+    # Resolve input path — auto-detect if not specified
+    if args.input:
+        input_path = CURRENT_RUN_DIR / args.input
+    else:
+        # Auto-detect digest_*.md in current directory
+        digest_files = list(CURRENT_RUN_DIR.glob("digest_*.md"))
+        if not digest_files:
+            print(f"Error: No digest_*.md files found in {CURRENT_RUN_DIR}")
+            sys.exit(1)
+        if len(digest_files) > 1:
+            print(f"Warning: Multiple digest files found, using {digest_files[0].name}")
+        input_path = digest_files[0]
+        print(f"Auto-detected input: {input_path.name}\n")
 
     if not input_path.exists():
         print(f"Error: File not found: {input_path}")
