@@ -31,7 +31,7 @@ Determine your role by checking your agent ID or session context:
 **Model**: Gemini Flash (fast, cost-effective)
 
 **Workflow**:
-1. Read papers from `resources/filtered_papers.json`
+1. Read papers from `resources/current/filtered_papers.json`
 2. Load user preferences from `user_preferences.json`
 3. Score papers in batches of 15-20 (never one-by-one)
 4. Assign scores 0-10 based on relevance
@@ -78,7 +78,7 @@ Determine your role by checking your agent ID or session context:
 **Model**: Gemini Pro (high-quality analysis)
 
 **Workflow**:
-1. Read top 25 papers from `resources/papers`
+1. Read top 25 papers from `resources/papers/`
 2. Load user preferences from `user_preferences.json`
 3. Perform deep analysis of each paper
 4. Select 5-6 papers that:
@@ -133,7 +133,7 @@ Determine your role by checking your agent ID or session context:
 - ✅ Deep, thoughtful analysis
 - ✅ Connect papers to user's specific research interests
 - ✅ Highlight surprising connections or novel approaches
-- ✅ **Read all the files in the `resources/papers` folder** 
+- ✅ **Read all the files in the `resources/papers/` folder** 
 - ✅ Consider diversity across user's interests (don't select 6 papers all on the same narrow topic)
 - ❌ No fluff or filler
 - ❌ No false enthusiasm for mediocre work
@@ -289,11 +289,14 @@ Both agents access these files in the workspace:
 ```
 
 ### Workflow Data Files
-- `resources/daily_papers.json` - Raw arXiv fetch (~500 papers)
-- `resources/filtered_papers.json` - Pre-filtered papers (~150 papers)
-- `resources/scored_papers_summary.json` - Quick-scored papers (top 25)
-- `resources/papers/YYMM.XXXXX.{html,txt}` - Complete versions of the papers in HTML or TXT format (25)
-- `digest_YYYY-MM-DD.json` - Final digest (5-6 papers)
+
+Each pipeline run writes to a date-stamped directory. `resources/current` is a symlink to today's run.
+
+- `resources/current/daily_papers.json` - Raw arXiv fetch (~500 papers)
+- `resources/current/filtered_papers.json` - Pre-filtered papers (~150 papers)
+- `resources/current/scored_papers_summary.json` - Quick-scored papers (top 25)
+- `resources/papers/YYMM.XXXXX.txt` - Downloaded paper full texts (25)
+- `resources/current/digest_YYYY-MM-DD.json` - Final digest (5-6 papers)
 
 ---
 
@@ -306,12 +309,12 @@ Both agents access these files in the workspace:
    - Check session ID for `cron:` prefix
 
 2. **What stage of the workflow am I in?**
-   - Quick-scorer: Scoring stage (input: filtered_papers.json)
-   - Deep-reviewer: Analysis stage (input: resources/papers)
+   - Quick-scorer: Scoring stage (input: resources/current/filtered_papers.json)
+   - Deep-reviewer: Analysis stage (input: resources/papers/)
 
 3. **What's my output target?**
-   - Quick-scorer: `resources/scored_papers_summary.json`
-   - Deep-reviewer: `resources/digests/digest_YYYY-MM-DD.json`
+   - Quick-scorer: `resources/current/scored_papers_summary.json`
+   - Deep-reviewer: `resources/current/digest_YYYY-MM-DD.json`
 
 **Never mix personas**. If you're quick-scorer, you're a filter, not an analyst. If you're deep-reviewer, you're an analyst, not a filter.
 

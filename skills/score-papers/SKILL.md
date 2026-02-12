@@ -19,7 +19,7 @@ This skill is used by:
 
 **Goal**: High-throughput filtering with good recall
 
-**Input**: `resources/filtered_papers.json` (~150 papers)
+**Input**: `resources/current/filtered_papers.json` (~150 papers)
 
 **Process**:
 1. Load user preferences from `user_preferences.json`
@@ -33,7 +33,7 @@ This skill is used by:
 - **Keyword match** (3 points max): Title/abstract contains user keywords
 - **Interest alignment** (2 points max): Relates to stated research interests
 
-**Output**: `resources/scored_papers_summary.json` with scores and brief reasons
+**Output**: `resources/current/scored_papers_summary.json` with scores and brief reasons
 
 **Example output**:
 ```json
@@ -62,7 +62,7 @@ This skill is used by:
 
 **Goal**: Scholarly analysis with precision
 
-**Input**: `resources/papers` (folder containing the full text papers in `HTML` or `TXT` format)
+**Input**: `resources/papers/` (folder containing the full text papers in `TXT` format)
 
 **Process**:
 1. Load user preferences from `user_preferences.json`
@@ -90,7 +90,7 @@ This skill is used by:
 - What makes this paper stand out
 - Potential impact or application
 
-**Output**: `resources/digests/digest_YYYY-MM-DD.json` with detailed analyses
+**Output**: `resources/current/digest_YYYY-MM-DD.json` with detailed analyses
 
 **Example output**:
 ```json
@@ -202,7 +202,7 @@ Look for signals of significant contribution:
 
 ### Input Files
 
-**resources/filtered_papers.json** (quick-scorer input):
+**resources/current/filtered_papers.json** (quick-scorer input):
 ```json
 [
   {
@@ -218,17 +218,17 @@ Look for signals of significant contribution:
 ]
 ```
 
-**resources/papers** (deep-reviewer input):
-Full text papers in `HTML` or `PDF` format.
+**resources/papers/** (deep-reviewer input):
+Full text papers in `TXT` format.
 
 
 ### Output Files
 
-**resources/scored_papers_summary.json** (quick-scorer output):
+**resources/current/scored_papers_summary.json** (quick-scorer output):
 - Top 25-30 papers with scores
 - Brief reasons (1 sentence)
 
-**resources/digests/digest_YYYY-MM-DD.json** (deep-reviewer output):
+**resources/current/digest_YYYY-MM-DD.json** (deep-reviewer output):
 - Final 5-6 papers with deep analysis
 - Summaries, relevance, key insights
 

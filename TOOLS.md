@@ -16,26 +16,26 @@
 
 ### quick-scorer
 ```python
-# Read filtered papers
-papers = json.load(open('resources/filtered_papers.json'))
+# Read filtered papers (from today's run directory via current symlink)
+papers = json.load(open('resources/current/filtered_papers.json'))
 
 # Score in batches (15-20 papers per API call)
 # ... scoring logic ...
 
 # Write results
-json.dump(scored_papers, open('resources/scored_papers.json', 'w'))
+json.dump(scored_papers, open('resources/current/scored_papers_summary.json', 'w'))
 ```
 
 ### deep-reviewer
 ```python
 # Read scored papers
-papers = json.load(open('resources/scored_papers.json'))
+papers = json.load(open('resources/current/scored_papers_summary.json'))
 
-# Analyze each paper deeply
+# Analyze each paper deeply (full texts in resources/papers/)
 # ... analysis logic ...
 
 # Write digest
-json.dump(digest, open(f'resources/digests/digest_{date}.json', 'w'))
+json.dump(digest, open(f'resources/current/digest_{date}.json', 'w'))
 ```
 
 ## Error Handling

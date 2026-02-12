@@ -12,16 +12,16 @@ This workspace supports an automated arXiv paper curation system with two specia
 - **Role**: High-throughput relevance filter
 - **Task**: Process ~150 papers/day, identify top 25
 - **Trigger**: Cron job at 6:30 AM daily
-- **Input**: `resources/filtered_papers.json`
-- **Output**: `resources/scored_papers_summary.json`
+- **Input**: `resources/current/filtered_papers.json`
+- **Output**: `resources/current/scored_papers_summary.json`
 - **Session**: `cron:quick-score`
 
 ### deep-reviewer (Gemini Pro)  
 - **Role**: Expert scholarly analyst
 - **Task**: Deep analysis of top 25, select final 5-6
 - **Trigger**: Cron job at 7:00 AM daily (after quick-scorer)
-- **Input**: `resources/scored_papers_summary.json` + `resources/papers`
-- **Output**: `resources/digests/digest_YYYY-MM-DD.json`
+- **Input**: `resources/current/scored_papers_summary.json` + `resources/papers`
+- **Output**: `resources/current/digest_YYYY-MM-DD.json`
 - **Session**: `cron:deep-review`
 
 ## Workflow Sequence
