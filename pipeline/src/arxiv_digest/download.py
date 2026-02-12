@@ -233,8 +233,12 @@ class PaperDownloader:
             # Save extracted text
             txt_path.write_text(text, encoding="utf-8")
 
+            # Delete PDF after successful extraction
+            pdf_path.unlink()
+
             size_kb = len(text) / 1024
             print(f"    ✓ Text extracted ({size_kb:.1f} KB, {len(text.split())} words)")
+            print("    ✓ PDF deleted (keeping .txt only)")
 
             return True, len(text)
 
