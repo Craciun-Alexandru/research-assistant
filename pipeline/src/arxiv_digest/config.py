@@ -79,8 +79,8 @@ def load_llm_config() -> dict:
     return {
         "provider": llm.get("provider", "gemini"),
         "scorer_model": llm.get("scorer_model", "gemini-2.0-flash"),
-        "reviewer_model": llm.get("reviewer_model", "gemini-2.0-pro"),
-        "api_key": os.environ.get(llm.get("api_key_env", "GEMINI_API_KEY"), ""),
+        "reviewer_model": llm.get("reviewer_model", "gemini-2.5-pro"),
+        "api_key": llm.get("api_key", ""),
     }
 
 

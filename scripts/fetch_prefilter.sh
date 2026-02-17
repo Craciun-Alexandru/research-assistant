@@ -7,9 +7,12 @@
 # Cron entry example (runs daily at 7:00 AM):
 # 0 7 * * * /path/to/fetch_prefilter.sh >> "$HOME/cron_digest.log" 2>&1
 # Make sure to replace "/path/to/fetch_prefilter.sh" with the actual path to this script on your system.
+set -e
+WORKSPACE="$HOME/.openclaw/workspaces/research-assistant"
+cd "$WORKSPACE/pipeline"
 
-SCRIPT_DIR="$HOME/.openclaw/workspaces/research-assistant/scripts"
+# Activate the project environment
+. .venv/bin/activate
 
-"$SCRIPT_DIR"/fetch_papers.py --categories "cs.LG,stat.ML,math.AG,math.AC" --days-back 1 --output daily_papers.json 
-
-"$SCRIPT_DIR"/prefilter_papers.py --input daily_papers.json --output filtered_papers.json --target-count 150 
+python -m arxiv_digest.fetch
+python -m arxiv_digest.prefilter

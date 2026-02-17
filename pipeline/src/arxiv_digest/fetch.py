@@ -18,7 +18,12 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 
-from arxiv_digest.config import DAILY_PAPERS_PATH, ensure_directories, setup_daily_run
+from arxiv_digest.config import (
+    DAILY_PAPERS_PATH,
+    USER_PREFERENCES_PATH,
+    ensure_directories,
+    setup_daily_run,
+)
 
 
 def fetch_arxiv_papers(
@@ -144,8 +149,7 @@ def main():
     parser = argparse.ArgumentParser(description="Fetch papers from arXiv API")
     parser.add_argument(
         "--categories",
-        required=True,
-        help="Comma-separated arXiv categories (e.g., cs.LG,stat.ML,math.AG)",
+        help="Comma-separated arXiv categories (default: read from user_preferences.json)",
     )
     parser.add_argument(
         "--days-back", type=int, default=1, help="Number of days back to fetch (default: 1)"
@@ -160,8 +164,15 @@ def main():
     ensure_directories()
     setup_daily_run()
 
-    # Parse categories
-    categories = [cat.strip() for cat in args.categories.split(",") if cat.strip()]
+    # Parse categories — from CLI arg or user_preferences.json
+    if args.categories:
+        categories = [cat.strip() for cat in args.categories.split(",") if cat.strip()]
+    else:
+        with USER_PREFERENCES_PATH.open() as f:
+            prefs = json.load(f)
+        categories = list(prefs.get("research_areas", {}).keys())
+        if categories:
+            print(f"(categories from {USER_PREFERENCES_PATH.name})")
 
     if not categories:
         print("Error: No valid categories provided")
