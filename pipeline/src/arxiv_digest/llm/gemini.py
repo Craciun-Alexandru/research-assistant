@@ -8,7 +8,7 @@ import time
 from google import genai
 from google.genai import types
 
-from arxiv_digest.llm.base import LLMClient, LLMError, LLMRateLimitError
+from arxiv_digest.llm.base import ChatSession, LLMClient, LLMError, LLMRateLimitError
 
 _DEFAULT_MODEL = "gemini-2.0-flash"
 _MAX_RETRIES = 3
@@ -66,3 +66,38 @@ class GeminiClient(LLMClient):
                 f"Rate limited after {_MAX_RETRIES} retries: {last_exc}"
             ) from last_exc
         raise LLMError(f"Gemini API error: {last_exc}") from last_exc
+
+    # ------------------------------------------------------------------
+    def chat(self, system_prompt: str, *, model: str | None = None) -> "GeminiChat":
+        """Start a multi-turn chat session.
+
+        Args:
+            system_prompt: System instruction for the conversation.
+            model: Optional model override.
+
+        Returns:
+            A GeminiChat instance.
+        """
+        model = model or self.default_model
+        chat = self._client.chats.create(
+            model=model,
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt,
+            ),
+        )
+        return GeminiChat(chat)
+
+
+class GeminiChat(ChatSession):
+    """Multi-turn chat session backed by the Gemini API."""
+
+    def __init__(self, chat: object) -> None:
+        self._chat = chat
+
+    def send(self, message: str) -> str:
+        """Send a message and return the model's text response."""
+        try:
+            response = self._chat.send_message(message)
+            return response.text
+        except Exception as exc:
+            raise LLMError(f"Gemini chat error: {exc}") from exc

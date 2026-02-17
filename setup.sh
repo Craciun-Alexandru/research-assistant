@@ -2,7 +2,7 @@
 # setup.sh — one-time setup after cloning the repository.
 #
 # Creates the Python venv, installs dependencies, configures the Gemini API
-# key, and installs cron jobs for the daily pipeline.
+# key, selects models, runs the onboarding wizard, and installs cron jobs.
 #
 # Usage:
 #   chmod +x setup.sh && ./setup.sh
@@ -13,6 +13,7 @@ WORKSPACE="$(cd "$(dirname "$0")" && pwd)"
 PIPELINE="$WORKSPACE/pipeline"
 PREFS="$WORKSPACE/user_preferences.json"
 SCRIPTS="$WORKSPACE/scripts"
+VENV_PYTHON="$PIPELINE/.venv/bin/python"
 LOG="\$HOME/cron_digest.log"
 
 echo "========================================"
@@ -46,7 +47,7 @@ echo "── Step 2: Gemini API key ──"
 # Check if key is already set in preferences
 EXISTING_KEY=""
 if [ -f "$PREFS" ]; then
-    EXISTING_KEY=$(python3 -c "
+    EXISTING_KEY=$("$VENV_PYTHON" -c "
 import json
 with open('$PREFS') as f:
     p = json.load(f)
@@ -65,52 +66,195 @@ if [ -n "$EXISTING_KEY" ]; then
     esac
 fi
 
+API_KEY="$EXISTING_KEY"
 if [ -z "$EXISTING_KEY" ]; then
     printf "Enter your Gemini API key: "
     read -r API_KEY
     if [ -z "$API_KEY" ]; then
         echo "Warning: No API key provided. You can set it later in user_preferences.json."
-    else
-        # Write key into user_preferences.json
-        python3 -c "
-import json
-with open('$PREFS') as f:
-    p = json.load(f)
+    fi
+fi
+
+if [ -n "$API_KEY" ]; then
+    # Write minimal prefs file with API key
+    "$VENV_PYTHON" -c "
+import json, os
+prefs_path = '$PREFS'
+if os.path.exists(prefs_path):
+    with open(prefs_path) as f:
+        p = json.load(f)
+else:
+    p = {}
 p.setdefault('llm', {})['api_key'] = '$API_KEY'
-with open('$PREFS', 'w') as f:
+p['llm'].setdefault('provider', 'gemini')
+with open(prefs_path, 'w') as f:
     json.dump(p, f, indent=2)
 "
-        echo "API key saved to user_preferences.json."
+    echo "API key saved."
 
-        # Quick verification
-        echo "Verifying API key..."
-        if "$PIPELINE/.venv/bin/python" -c "
-from arxiv_digest.config import load_llm_config
-from arxiv_digest.llm import create_client
-cfg = load_llm_config()
-c = create_client(cfg['provider'], api_key=cfg['api_key'])
-r = c._client.models.get(model='gemini-2.0-flash')
+    # Quick verification
+    echo "Verifying API key..."
+    if "$VENV_PYTHON" -c "
+from google import genai
+c = genai.Client(api_key='$API_KEY')
+r = c.models.get(model='gemini-2.0-flash')
 print('OK — connected to Gemini API')
 " 2>/dev/null; then
-            true
-        else
-            echo "Warning: Could not verify API key. Check it in user_preferences.json."
-        fi
+        true
+    else
+        echo "Warning: Could not verify API key. Check it in user_preferences.json."
     fi
 fi
 echo
 
-# ── 3. Create resource directories ─────────────────────────────────
+# ── 2b. Model selection ───────────────────────────────────────────
 
-echo "── Step 3: Resource directories ──"
+echo "── Step 2b: Model selection ──"
+
+if [ -n "$API_KEY" ]; then
+    "$VENV_PYTHON" - "$PREFS" << 'PYEOF'
+import json
+import sys
+
+from google import genai
+
+prefs_path = sys.argv[1]
+
+# Read current prefs
+with open(prefs_path) as f:
+    prefs = json.load(f)
+
+api_key = prefs.get("llm", {}).get("api_key", "")
+if not api_key:
+    print("No API key found, skipping model selection.")
+    sys.exit(0)
+
+client = genai.Client(api_key=api_key)
+
+# Fetch available models
+try:
+    models_response = client.models.list()
+    all_models = [m.name for m in models_response if "generateContent" in (m.supported_actions or [])]
+except Exception as e:
+    print(f"Could not list models: {e}")
+    print("Using defaults: gemini-2.0-flash (scorer), gemini-2.5-pro (reviewer)")
+    prefs["llm"]["scorer_model"] = "gemini-2.0-flash"
+    prefs["llm"]["reviewer_model"] = "gemini-2.5-pro"
+    with open(prefs_path, "w") as f:
+        json.dump(prefs, f, indent=2)
+    sys.exit(0)
+
+# Split into flash-class and pro-class
+flash_models = [m for m in all_models if "flash" in m.lower()]
+pro_models = [m for m in all_models if "pro" in m.lower()]
+
+# Scorer model (flash-class)
+print("\nAvailable flash-class models (for scoring):")
+for i, m in enumerate(flash_models, 1):
+    # Strip "models/" prefix for display
+    display = m.replace("models/", "")
+    print(f"  {i}. {display}")
+
+current_scorer = prefs.get("llm", {}).get("scorer_model", "")
+if current_scorer:
+    print(f"\n  Current: {current_scorer}")
+    choice = input("  Pick a number (Enter to keep current): ").strip()
+else:
+    choice = input("  Pick a number: ").strip()
+
+if choice.isdigit() and 1 <= int(choice) <= len(flash_models):
+    selected = flash_models[int(choice) - 1].replace("models/", "")
+    prefs["llm"]["scorer_model"] = selected
+    print(f"  Selected: {selected}")
+elif not choice and current_scorer:
+    print(f"  Keeping: {current_scorer}")
+else:
+    default = flash_models[0].replace("models/", "") if flash_models else "gemini-2.0-flash"
+    prefs["llm"]["scorer_model"] = default
+    print(f"  Using default: {default}")
+
+# Reviewer model (pro-class)
+print("\nAvailable pro-class models (for deep review):")
+for i, m in enumerate(pro_models, 1):
+    display = m.replace("models/", "")
+    print(f"  {i}. {display}")
+
+current_reviewer = prefs.get("llm", {}).get("reviewer_model", "")
+if current_reviewer:
+    print(f"\n  Current: {current_reviewer}")
+    choice = input("  Pick a number (Enter to keep current): ").strip()
+else:
+    choice = input("  Pick a number: ").strip()
+
+if choice.isdigit() and 1 <= int(choice) <= len(pro_models):
+    selected = pro_models[int(choice) - 1].replace("models/", "")
+    prefs["llm"]["reviewer_model"] = selected
+    print(f"  Selected: {selected}")
+elif not choice and current_reviewer:
+    print(f"  Keeping: {current_reviewer}")
+else:
+    default = pro_models[0].replace("models/", "") if pro_models else "gemini-2.5-pro"
+    prefs["llm"]["reviewer_model"] = default
+    print(f"  Using default: {default}")
+
+# Save
+with open(prefs_path, "w") as f:
+    json.dump(prefs, f, indent=2)
+print("\nModel selections saved.")
+PYEOF
+else
+    echo "Skipped (no API key)."
+fi
+echo
+
+# ── 3. Onboarding wizard ─────────────────────────────────────────
+
+echo "── Step 3: Research preferences ──"
+
+if [ -n "$API_KEY" ]; then
+    # Check if research preferences already exist
+    HAS_RESEARCH=$("$VENV_PYTHON" -c "
+import json
+with open('$PREFS') as f:
+    p = json.load(f)
+areas = p.get('research_areas', {})
+if areas:
+    print('yes')
+" 2>/dev/null || true)
+
+    if [ "$HAS_RESEARCH" = "yes" ]; then
+        printf "Research preferences already configured. Re-run wizard? [y/N] "
+        read -r RERUN_WIZARD
+        case "$RERUN_WIZARD" in
+            [yY]*)
+                "$VENV_PYTHON" -m arxiv_digest.onboard
+                ;;
+            *)
+                echo "Keeping existing preferences."
+                ;;
+        esac
+    else
+        echo "Let's set up your research preferences..."
+        echo
+        "$VENV_PYTHON" -m arxiv_digest.onboard
+    fi
+else
+    echo "Skipped (no API key). Run the wizard later with:"
+    echo "  $VENV_PYTHON -m arxiv_digest.onboard"
+fi
+echo
+
+# ── 4. Create resource directories ─────────────────────────────────
+
+echo "── Step 4: Resource directories ──"
 mkdir -p "$WORKSPACE/resources/papers"
 mkdir -p "$WORKSPACE/resources/digests"
 echo "Directories ready."
 echo
 
-# ── 4. Cron jobs ────────────────────────────────────────────────────
+# ── 5. Cron jobs ────────────────────────────────────────────────────
 
-echo "── Step 4: Cron jobs ──"
+echo "── Step 5: Cron jobs ──"
 echo
 echo "The daily pipeline runs via cron at these times:"
 echo "  07:00  fetch + prefilter"
@@ -165,5 +309,8 @@ echo "  python -m arxiv_digest.download"
 echo "  python -m arxiv_digest.reviewer --delay 5"
 echo "  python -m arxiv_digest.digest"
 echo "  python -m arxiv_digest.deliver"
+echo
+echo "To re-run the preference wizard:"
+echo "  $VENV_PYTHON -m arxiv_digest.onboard"
 echo
 echo "Or use the shell scripts in scripts/."

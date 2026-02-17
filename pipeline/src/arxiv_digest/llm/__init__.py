@@ -7,7 +7,7 @@ Usage::
     client = create_client("gemini", api_key="...")
 """
 
-from arxiv_digest.llm.base import LLMClient, LLMError, LLMRateLimitError
+from arxiv_digest.llm.base import ChatSession, LLMClient, LLMError, LLMRateLimitError
 
 
 def create_client(provider: str, **kwargs: object) -> LLMClient:
@@ -31,4 +31,4 @@ def create_client(provider: str, **kwargs: object) -> LLMClient:
     raise ValueError(f"Unknown LLM provider: {provider!r}")
 
 
-__all__ = ["create_client", "LLMClient", "LLMError", "LLMRateLimitError"]
+__all__ = ["create_client", "ChatSession", "LLMClient", "LLMError", "LLMRateLimitError"]
