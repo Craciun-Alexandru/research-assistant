@@ -112,7 +112,10 @@ echo
 echo "── Step 2b: Model selection ──"
 
 if [ -n "$API_KEY" ]; then
-    "$VENV_PYTHON" - "$PREFS" << 'PYEOF'
+    # Write model selection script to a temp file so stdin stays on the terminal
+    _MODEL_SCRIPT=$(mktemp)
+    trap 'rm -f "$_MODEL_SCRIPT"' EXIT
+    cat > "$_MODEL_SCRIPT" << 'PYEOF'
 import json
 import sys
 
@@ -202,6 +205,8 @@ with open(prefs_path, "w") as f:
     json.dump(prefs, f, indent=2)
 print("\nModel selections saved.")
 PYEOF
+    "$VENV_PYTHON" "$_MODEL_SCRIPT" "$PREFS"
+    rm -f "$_MODEL_SCRIPT"
 else
     echo "Skipped (no API key)."
 fi
