@@ -1,11 +1,11 @@
 # arXiv Digest Pipeline
 
-Automated daily arXiv paper curation system. Fetches papers, pre-filters by keywords, scores via Gemini agents (managed by OpenClaw), downloads full texts, generates digest, delivers via Discord.
+Automated daily arXiv paper curation system. Fetches papers, pre-filters by keywords, scores and reviews via Gemini API, downloads full texts, generates digest, delivers via Discord.
 
 ## Stack
 
 - Python 3.12+, no frameworks
-- Dependencies: requests, beautifulsoup4, PyMuPDF (fitz)
+- Dependencies: requests, beautifulsoup4, PyMuPDF (fitz), google-genai
 - Linting/formatting: ruff
 - Package: `src/arxiv_digest/` (PEP 621, pyproject.toml)
 - Install for dev: `pip install -e ".[dev]" --break-system-packages`
@@ -22,21 +22,15 @@ make install       # pip install -e ".[dev]"
 ## Project Layout
 
 ```
-src/arxiv_digest/     # Python package — all pipeline logic lives here
-  config.py           # ALL paths and constants. Never hardcode workspace paths elsewhere.
+pipeline/
+  src/arxiv_digest/     # Python package — all pipeline logic lives here
+    config.py           # ALL paths and constants. Never hardcode workspace paths elsewhere.
+    llm/                # LLM client abstraction (Gemini backend)
+    onboard.py          # Interactive preference wizard (python -m arxiv_digest.onboard)
 scripts/              # Thin shell wrappers for cron jobs (call python -m arxiv_digest.*)
 resources/            # Data directory (papers, digests, JSON intermediates)
-skills/               # OpenClaw skills for Gemini agents — NOT Claude Code skills
 tests/                # pytest
 ```
-
-## CRITICAL: Do Not Touch
-
-The following root-level files are **OpenClaw agent configuration** read by Gemini agents at runtime. Do NOT refactor, move, rename, or restructure them:
-- SOUL.md, IDENTITY.md, AGENTS.md, HEARTBEAT.md, TOOLS.md, USER.md, SPEC.md, ARCHITECTURE.md
-- `skills/` directory (OpenClaw skills, not Claude Code skills)
-- `memory/` directory
-- `user_preferences.json`
 
 ## Code Conventions
 
@@ -51,13 +45,11 @@ The following root-level files are **OpenClaw agent configuration** read by Gemi
 
 ```
 fetch_papers (arXiv API) → prefilter (keyword/category match)
-  → [Gemini quick-scorer via OpenClaw cron]
+  → scorer (Gemini Flash)
   → download (HTML→TXT, PDF→TXT fallback)
-  → [Gemini deep-reviewer via OpenClaw cron]
-  → digest (JSON→Markdown) → deliver (Discord via openclaw CLI)
+  → reviewer (Gemini Pro)
+  → digest (JSON→Markdown) → deliver (Discord webhook)
 ```
-
-Steps in brackets are OpenClaw agent tasks, not Python scripts.
 
 ## Workspace Path
 
