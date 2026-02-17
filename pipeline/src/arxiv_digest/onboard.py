@@ -149,7 +149,7 @@ def main() -> None:
         try:
             llm_config = load_llm_config()
         except Exception:
-            print("Error: No LLM configuration found.")
+            print(f"Error: No LLM configuration found in {USER_PREFERENCES_PATH}")
             print("Run setup.sh first to configure your API key.")
             sys.exit(1)
 

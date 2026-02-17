@@ -10,6 +10,7 @@
 set -e
 
 WORKSPACE="$(cd "$(dirname "$0")" && pwd)"
+export ARXIV_DIGEST_WORKSPACE="$WORKSPACE"
 PIPELINE="$WORKSPACE/pipeline"
 PREFS="$WORKSPACE/user_preferences.json"
 SCRIPTS="$WORKSPACE/scripts"
