@@ -4,6 +4,7 @@ Shared configuration: paths, constants, and environment.
 Every module imports paths from here. No hardcoded workspace paths elsewhere.
 """
 
+import json
 import os
 from datetime import date
 from pathlib import Path
@@ -64,6 +65,23 @@ def setup_daily_run() -> Path:
     tmp_link.rename(current_link)
 
     return daily_dir
+
+
+def load_llm_config() -> dict:
+    """Load LLM configuration from user preferences.
+
+    Returns:
+        Dict with keys: provider, scorer_model, reviewer_model, api_key.
+    """
+    with USER_PREFERENCES_PATH.open() as f:
+        prefs = json.load(f)
+    llm = prefs.get("llm", {})
+    return {
+        "provider": llm.get("provider", "gemini"),
+        "scorer_model": llm.get("scorer_model", "gemini-2.0-flash"),
+        "reviewer_model": llm.get("reviewer_model", "gemini-2.0-pro"),
+        "api_key": os.environ.get(llm.get("api_key_env", "GEMINI_API_KEY"), ""),
+    }
 
 
 def ensure_directories() -> None:
