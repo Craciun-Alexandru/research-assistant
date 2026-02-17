@@ -40,10 +40,10 @@ def parse_args():
         default="",
         help="Pipe-separated list of things to avoid",
     )
-    
+
     # Dynamic keyword arguments for each area
     args, unknown = parser.parse_known_args()
-    
+
     # Parse area-specific keywords
     keywords_args = {}
     for arg in unknown:
@@ -53,7 +53,7 @@ def parse_args():
             idx = unknown.index(arg)
             if idx + 1 < len(unknown):
                 keywords_args[area] = unknown[idx + 1]
-    
+
     return args, keywords_args
 
 
@@ -62,7 +62,9 @@ def parse_areas(areas_str):
     areas = {}
     for pair in areas_str.split(","):
         if ":" not in pair:
-            print(f"Warning: Skipping malformed area '{pair}' (expected format: 'area:weight')")
+            print(
+                f"Warning: Skipping malformed area '{pair}' (expected format: 'area:weight')"
+            )
             continue
         area, weight = pair.split(":", 1)
         try:
@@ -90,51 +92,51 @@ def parse_list(list_str):
 def build_preferences(areas_dict, keywords_dict, interests, avoid):
     """Build the user_preferences.json structure."""
     research_areas = {}
-    
+
     for area, weight in areas_dict.items():
         research_areas[area] = {
             "weight": weight,
-            "keywords": keywords_dict.get(area, [])
+            "keywords": keywords_dict.get(area, []),
         }
-    
+
     return {
         "research_areas": research_areas,
         "interests": interests,
         "avoid": avoid,
         "feedback_history": [],
-        "last_updated": datetime.utcnow().isoformat() + "Z"
+        "last_updated": datetime.utcnow().isoformat() + "Z",
     }
 
 
 def main():
     args, keywords_args = parse_args()
-    
+
     # Parse areas
     areas_dict = parse_areas(args.areas)
     if not areas_dict:
         print("Error: No valid research areas provided")
         sys.exit(1)
-    
+
     # Parse keywords for each area
     keywords_dict = {}
     for area in areas_dict.keys():
         if area in keywords_args:
             keywords_dict[area] = parse_keywords(keywords_args[area])
-    
+
     # Parse interests and avoid lists
     interests = parse_list(args.interests)
     avoid = parse_list(args.avoid)
-    
+
     # Build preferences structure
     preferences = build_preferences(areas_dict, keywords_dict, interests, avoid)
-    
+
     # Write to output file
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     with open(output_path, "w") as f:
         json.dump(preferences, f, indent=2)
-    
+
     print(f"✓ Preferences saved to {output_path}")
     print(f"✓ Tracking {len(areas_dict)} research areas")
     print(f"✓ {sum(len(kws) for kws in keywords_dict.values())} total keywords")

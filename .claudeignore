@@ -1,0 +1,15 @@
+# Paper full texts and PDFs (80+ files, would eat context)
+resources/
+
+# OpenClaw memory logs
+memory/
+
+# Binary and large data files
+*.pdf
+
+# Python scripts in scripts/
+scripts/*.py
+
+# Python virtual environment
+*/venv/
+*/.venv/

@@ -1,0 +1,19 @@
+{
+  "env": {
+    "BASH_DEFAULT_TIMEOUT_MS": "120000"
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|MultiEdit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [[ \"$CLAUDE_TOOL_INPUT_FILE_PATH\" =~ \\.py$ ]]; then\n  ruff check --fix --quiet \"$CLAUDE_TOOL_INPUT_FILE_PATH\" 2>&1\n  ruff format --quiet \"$CLAUDE_TOOL_INPUT_FILE_PATH\" 2>&1\n  if [ $? -ne 0 ]; then\n    echo '{\"feedback\": \"ruff formatting failed — check for syntax errors.\"}' >&2\n    exit 1\n  else\n    echo '{\"feedback\": \"ruff: formatted.\", \"suppressOutput\": true}'\n  fi\nfi",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}

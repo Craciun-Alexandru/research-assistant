@@ -5,12 +5,12 @@
 # Cron entry example (runs daily at 8:00 AM):
 # 0 8 * * * * /path/to/process_deliver.sh >> "$HOME/cron_digest.log" 2>&1
 # Make sure to replace "/path/to/process_deliver.sh" with the actual path to this script on your system.
+set -e
+WORKSPACE="$HOME/.openclaw/workspaces/research-assistant"
+cd "$WORKSPACE/pipeline"
 
-SCRIPT_DIR="$HOME/.openclaw/workspaces/research-assistant/scripts"
-date_str=$(date +\%Y-\%m-\%d)
+# Activate the project environment (one line)
+. .venv/bin/activate
 
-export PATH="$PATH:/home/ac/.nvm/versions/node/v24.13.0/bin"
-
-"$SCRIPT_DIR"/make_digest_markdown.py --input "digest_${date_str}.json"
-
-"$SCRIPT_DIR"/deliver_digest_markdown.py --input "digest_${date_str}.md" --discord-user 1103007117671157760
+python -m arxiv_digest.digest
+python -m arxiv_digest.deliver
