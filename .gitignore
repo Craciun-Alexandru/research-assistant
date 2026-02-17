@@ -11,6 +11,9 @@ resources/
 # OpenClaw memory (agent-generated, ephemeral)
 memory/
 
+# User config (contains API key)
+user_preferences.json
+
 # Environment
 .env
 *.log
