@@ -61,7 +61,7 @@ fi
 if [ -n "$EXISTING_KEY" ]; then
     echo "API key already configured (starts with ${EXISTING_KEY%"${EXISTING_KEY#????}"}...)."
     printf "Keep existing key? [Y/n] "
-    read -r KEEP_KEY
+    read -r KEEP_KEY || true
     case "$KEEP_KEY" in
         [nN]*) EXISTING_KEY="" ;;
     esac
@@ -70,7 +70,7 @@ fi
 API_KEY="$EXISTING_KEY"
 if [ -z "$EXISTING_KEY" ]; then
     printf "Enter your Gemini API key: "
-    read -r API_KEY
+    read -r API_KEY || true
     if [ -z "$API_KEY" ]; then
         echo "Warning: No API key provided. You can set it later in user_preferences.json."
     fi
@@ -230,7 +230,7 @@ if areas:
 
     if [ "$HAS_RESEARCH" = "yes" ]; then
         printf "Research preferences already configured. Re-run wizard? [y/N] "
-        read -r RERUN_WIZARD
+        read -r RERUN_WIZARD || true
         case "$RERUN_WIZARD" in
             [yY]*)
                 "$VENV_PYTHON" -m arxiv_digest.onboard
@@ -271,7 +271,7 @@ echo "  07:59  digest + deliver"
 echo
 
 printf "Install cron jobs? [y/N] "
-read -r INSTALL_CRON
+read -r INSTALL_CRON || true
 case "$INSTALL_CRON" in
     [yY]*)
         # Build cron block
