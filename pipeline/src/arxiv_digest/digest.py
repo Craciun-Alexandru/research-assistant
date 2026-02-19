@@ -39,6 +39,10 @@ PAPER_TEMPLATE = """
 
 {summary}
 
+### Key Insight
+
+{key_insight}
+
 ### Relevance to Your Research
 
 {relevance}
@@ -94,8 +98,8 @@ def generate_markdown(digest: dict) -> str:
             categories=format_categories(paper.get("categories", [])),
             score=paper.get("score", 0),
             summary=paper.get("summary", "No summary available."),
+            key_insight=paper.get("key_insight", "No key insight provided."),
             relevance=paper.get("relevance", "Relevance not specified."),
-            # key_insight=paper.get('key_insight', 'No key insight provided.')
         )
         papers_markdown += paper_md
 

@@ -19,7 +19,7 @@ from arxiv_digest.config import (
 )
 from arxiv_digest.llm import LLMError, create_client
 from arxiv_digest.llm.base import LLMClient
-from arxiv_digest.prefilter import get_all_keywords
+from arxiv_digest.utils import get_all_keywords
 
 # ── Deterministic scoring functions ──────────────────────────────────
 

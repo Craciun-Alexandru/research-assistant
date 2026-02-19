@@ -1,4 +1,4 @@
-.PHONY: install lint format test pipeline fetch prefilter download digest deliver setup-cron clean
+.PHONY: install lint format test pipeline fetch prefilter scorer download reviewer digest deliver setup-cron clean
 
 # ── Setup ──
 
@@ -26,8 +26,14 @@ fetch:
 prefilter:
 	python -m arxiv_digest.prefilter
 
+scorer:
+	python -m arxiv_digest.scorer
+
 download:
 	python -m arxiv_digest.download
+
+reviewer:
+	python -m arxiv_digest.reviewer
 
 digest:
 	python -m arxiv_digest.digest
@@ -35,12 +41,8 @@ digest:
 deliver:
 	python -m arxiv_digest.deliver
 
-pipeline: fetch prefilter
-	@echo "──────────────────────────────────────"
-	@echo "Pipeline: fetch + prefilter complete."
-	@echo "Now wait for OpenClaw quick-scorer, then run: make download"
-	@echo "After OpenClaw deep-reviewer, run: make digest deliver"
-	@echo "──────────────────────────────────────"
+pipeline:
+	python -m arxiv_digest
 
 # ── Cron Setup (placeholder) ──
 

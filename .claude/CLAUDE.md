@@ -45,10 +45,12 @@ tests/                # pytest
 
 ```
 fetch_papers (arXiv API) → prefilter (keyword/category match)
-  → scorer (Gemini Flash)
+  → scorer (LLM — configurable: Gemini Flash or Claude Haiku)
   → download (HTML→TXT, PDF→TXT fallback)
-  → reviewer (Gemini Pro)
+  → reviewer (LLM — configurable: Gemini Pro or Claude Sonnet)
   → digest (JSON→Markdown) → deliver (Discord webhook)
+
+Run entire pipeline: python -m arxiv_digest
 ```
 
 ## Workspace Path

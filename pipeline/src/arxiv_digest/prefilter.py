@@ -11,31 +11,9 @@ Usage:
 """
 
 import argparse
-import json
-from pathlib import Path
 
 from arxiv_digest.config import DAILY_PAPERS_PATH, FILTERED_PAPERS_PATH, USER_PREFERENCES_PATH
-
-
-def load_json(filepath: Path) -> dict:
-    """Load JSON file."""
-    with filepath.open() as f:
-        return json.load(f)
-
-
-def save_json(data: dict, filepath: Path):
-    """Save JSON file."""
-    with filepath.open("w") as f:
-        json.dump(data, f, indent=2)
-
-
-def get_all_keywords(preferences: dict) -> set[str]:
-    """Extract all keywords from user preferences."""
-    keywords = set()
-    for area_data in preferences["research_areas"].values():
-        for keyword in area_data.get("keywords", []):
-            keywords.add(keyword.lower())
-    return keywords
+from arxiv_digest.utils import get_all_keywords, load_json, save_json
 
 
 def prefilter_score(paper: dict, user_categories: set[str], user_keywords: set[str]) -> float:
@@ -82,7 +60,6 @@ def apply_avoidance_filters(paper: dict, avoid_criteria: list[str]) -> bool:
     """
     title_lower = paper.get("title", "").lower()
     abstract_lower = paper.get("abstract", "").lower()
-    title_lower + " " + abstract_lower
 
     for criterion in avoid_criteria:
         criterion_lower = criterion.lower()

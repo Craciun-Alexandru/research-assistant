@@ -7,28 +7,30 @@ allowed-tools: Bash(python:*), Bash(make:*)
 
 Run the complete daily arXiv digest pipeline step by step.
 
-**NOTE**: This runs only the Python-managed steps. The Gemini agent steps (quick-scorer, deep-reviewer) are triggered separately via OpenClaw cron.
-
 ## Steps
 
 1. Fetch papers from arXiv API
 2. Pre-filter by keywords and categories
-3. Download full paper texts (after quick-scorer has run)
-4. Generate markdown digest (after deep-reviewer has run)
-5. Deliver via Discord
+3. Score filtered papers (deterministic + LLM)
+4. Download full paper texts
+5. Deep-review selected papers (LLM)
+6. Generate markdown digest
+7. Deliver via Discord
 
 ## Usage
 
-Run all Python steps in sequence:
+Run all steps in sequence:
 ```bash
-make pipeline
+python -m arxiv_digest
 ```
 
-Or run individual steps:
+Or individually:
 ```bash
 python -m arxiv_digest.fetch
 python -m arxiv_digest.prefilter
+python -m arxiv_digest.scorer
 python -m arxiv_digest.download
+python -m arxiv_digest.reviewer
 python -m arxiv_digest.digest
 python -m arxiv_digest.deliver
 ```
