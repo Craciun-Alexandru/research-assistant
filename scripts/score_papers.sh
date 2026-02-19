@@ -1,7 +1,8 @@
 #!/bin/sh
 # Thin wrapper: score filtered papers.
 set -e
-WORKSPACE="$HOME/.openclaw/workspaces/research-assistant"
+WORKSPACE="$(cd "$(dirname "$0")/.." && pwd)"
+export ARXIV_DIGEST_WORKSPACE="$WORKSPACE"
 cd "$WORKSPACE/pipeline"
 
 . .venv/bin/activate
