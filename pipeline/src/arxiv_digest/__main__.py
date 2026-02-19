@@ -10,7 +10,7 @@ STEPS = [
     ("download", "Downloading full paper texts"),
     ("reviewer", "Deep-reviewing selected papers"),
     ("digest", "Formatting digest"),
-    ("deliver", "Delivering via Discord"),
+    ("deliver", "Delivering digest"),
 ]
 
 

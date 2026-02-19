@@ -367,6 +367,184 @@ else
 fi
 echo
 
+# ── 3b. Delivery settings ──────────────────────────────────────────
+
+echo "── Step 3b: Delivery settings ──"
+
+CURRENT_DELIVERY="discord"
+if [ -f "$PREFS" ]; then
+    CURRENT_DELIVERY=$("$VENV_PYTHON" -c "
+import json
+with open('$PREFS') as f:
+    p = json.load(f)
+print(p.get('delivery', {}).get('method', 'discord'))
+" 2>/dev/null || echo "discord")
+fi
+
+echo "  How should the digest be delivered?"
+echo "  1. discord  (Discord only)"
+echo "  2. email    (Email only)"
+echo "  3. both     (Discord + Email)"
+echo "  Current: $CURRENT_DELIVERY"
+printf "  Pick delivery method (Enter to keep current): "
+read -r DELIVERY_CHOICE || true
+case "$DELIVERY_CHOICE" in
+    1) DELIVERY_METHOD="discord" ;;
+    2) DELIVERY_METHOD="email" ;;
+    3) DELIVERY_METHOD="both" ;;
+    *) DELIVERY_METHOD="$CURRENT_DELIVERY" ;;
+esac
+echo "  Using: $DELIVERY_METHOD"
+echo
+
+# Discord user ID (if discord or both)
+DELIVERY_DISCORD_USER=""
+if [ "$DELIVERY_METHOD" = "discord" ] || [ "$DELIVERY_METHOD" = "both" ]; then
+    EXISTING_DISCORD_USER=$("$VENV_PYTHON" -c "
+import json, os
+if os.path.exists('$PREFS'):
+    with open('$PREFS') as f:
+        p = json.load(f)
+    print(p.get('delivery', {}).get('discord', {}).get('user_id', ''))
+" 2>/dev/null || true)
+
+    if [ -n "$EXISTING_DISCORD_USER" ]; then
+        echo "  Discord user ID: $EXISTING_DISCORD_USER"
+        printf "  Keep existing? [Y/n] "
+        read -r KEEP_DISCORD || true
+        case "$KEEP_DISCORD" in
+            [nN]*)
+                printf "  Enter Discord user ID: "
+                read -r DELIVERY_DISCORD_USER || true
+                ;;
+            *)
+                DELIVERY_DISCORD_USER="$EXISTING_DISCORD_USER"
+                ;;
+        esac
+    else
+        printf "  Enter Discord user ID: "
+        read -r DELIVERY_DISCORD_USER || true
+    fi
+fi
+
+# Email settings (if email or both)
+EMAIL_SMTP_HOST=""
+EMAIL_SMTP_PORT="587"
+EMAIL_SMTP_USER=""
+EMAIL_SMTP_PASSWORD=""
+EMAIL_FROM=""
+EMAIL_TO=""
+
+if [ "$DELIVERY_METHOD" = "email" ] || [ "$DELIVERY_METHOD" = "both" ]; then
+    HAS_EMAIL=$("$VENV_PYTHON" -c "
+import json, os
+if os.path.exists('$PREFS'):
+    with open('$PREFS') as f:
+        p = json.load(f)
+    host = p.get('delivery', {}).get('email', {}).get('smtp_host', '')
+    if host:
+        print('yes')
+" 2>/dev/null || true)
+
+    CONFIGURE_EMAIL="y"
+    if [ "$HAS_EMAIL" = "yes" ]; then
+        printf "  Email already configured. Reconfigure? [y/N] "
+        read -r CONFIGURE_EMAIL || true
+        case "$CONFIGURE_EMAIL" in
+            [yY]*) CONFIGURE_EMAIL="y" ;;
+            *) CONFIGURE_EMAIL="n" ;;
+        esac
+    fi
+
+    if [ "$CONFIGURE_EMAIL" = "y" ]; then
+        echo
+        echo "  SMTP server hints:"
+        echo "    Gmail:   smtp.gmail.com (port 587, needs App Password)"
+        echo "             https://myaccount.google.com/apppasswords"
+        echo "    Outlook: smtp.office365.com (port 587)"
+        echo
+
+        printf "  SMTP host [smtp.gmail.com]: "
+        read -r EMAIL_SMTP_HOST || true
+        EMAIL_SMTP_HOST="${EMAIL_SMTP_HOST:-smtp.gmail.com}"
+
+        printf "  SMTP port [587]: "
+        read -r EMAIL_SMTP_PORT || true
+        EMAIL_SMTP_PORT="${EMAIL_SMTP_PORT:-587}"
+
+        printf "  SMTP username (email address): "
+        read -r EMAIL_SMTP_USER || true
+
+        printf "  SMTP password (App Password for Gmail): "
+        stty -echo 2>/dev/null || true
+        read -r EMAIL_SMTP_PASSWORD || true
+        stty echo 2>/dev/null || true
+        echo
+
+        printf "  From address [%s]: " "$EMAIL_SMTP_USER"
+        read -r EMAIL_FROM || true
+        EMAIL_FROM="${EMAIL_FROM:-$EMAIL_SMTP_USER}"
+
+        printf "  To address [%s]: " "$EMAIL_SMTP_USER"
+        read -r EMAIL_TO || true
+        EMAIL_TO="${EMAIL_TO:-$EMAIL_SMTP_USER}"
+
+        # Offer test email
+        if [ -n "$EMAIL_SMTP_HOST" ] && [ -n "$EMAIL_SMTP_USER" ] && [ -n "$EMAIL_SMTP_PASSWORD" ]; then
+            printf "  Send a test email? [y/N] "
+            read -r SEND_TEST || true
+            case "$SEND_TEST" in
+                [yY]*)
+                    "$VENV_PYTHON" -c "
+import smtplib
+from email.mime.text import MIMEText
+msg = MIMEText('This is a test email from arXiv Research Digest.')
+msg['Subject'] = 'arXiv Digest — Test Email'
+msg['From'] = '$EMAIL_FROM'
+msg['To'] = '$EMAIL_TO'
+try:
+    with smtplib.SMTP('$EMAIL_SMTP_HOST', $EMAIL_SMTP_PORT, timeout=15) as s:
+        s.starttls()
+        s.login('$EMAIL_SMTP_USER', '$EMAIL_SMTP_PASSWORD')
+        s.sendmail('$EMAIL_FROM', '$EMAIL_TO', msg.as_string())
+    print('  OK — test email sent!')
+except Exception as e:
+    print(f'  Warning: Could not send test email: {e}')
+"
+                    ;;
+            esac
+        fi
+    fi
+fi
+
+# Save delivery config
+"$VENV_PYTHON" -c "
+import json, os
+prefs_path = '$PREFS'
+if os.path.exists(prefs_path):
+    with open(prefs_path) as f:
+        p = json.load(f)
+else:
+    p = {}
+delivery = p.setdefault('delivery', {})
+delivery['method'] = '$DELIVERY_METHOD'
+if '$DELIVERY_DISCORD_USER':
+    delivery.setdefault('discord', {})['user_id'] = '$DELIVERY_DISCORD_USER'
+if '$EMAIL_SMTP_HOST':
+    delivery['email'] = {
+        'smtp_host': '$EMAIL_SMTP_HOST',
+        'smtp_port': int('$EMAIL_SMTP_PORT'),
+        'smtp_user': '$EMAIL_SMTP_USER',
+        'smtp_password': '$EMAIL_SMTP_PASSWORD',
+        'from_address': '$EMAIL_FROM',
+        'to_address': '$EMAIL_TO',
+    }
+with open(prefs_path, 'w') as f:
+    json.dump(p, f, indent=2)
+"
+echo "Delivery settings saved."
+echo
+
 # ── 4. Create resource directories ─────────────────────────────────
 
 echo "── Step 4: Resource directories ──"
@@ -432,6 +610,7 @@ echo "  python -m arxiv_digest.download"
 echo "  python -m arxiv_digest.reviewer --delay 5"
 echo "  python -m arxiv_digest.digest"
 echo "  python -m arxiv_digest.deliver"
+echo "  python -m arxiv_digest.deliver_email   # email only"
 echo
 echo "To re-run the preference wizard:"
 echo "  $VENV_PYTHON -m arxiv_digest.onboard"

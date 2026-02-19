@@ -173,6 +173,19 @@ def main():
         print("\n⚠️  Warning: File may be too large for a single Discord message")
         print("   Consider splitting or using file attachment")
 
+    # Generate HTML version for email delivery
+    from arxiv_digest.digest_html import generate_html
+
+    html_output_path = output_path.with_suffix(".html")
+    html_content = generate_html(digest)
+    with html_output_path.open("w") as f:
+        f.write(html_content)
+
+    html_size = html_output_path.stat().st_size
+    print("\n✓ HTML digest created")
+    print(f"✓ Saved to {html_output_path}")
+    print(f"✓ File size: {html_size:,} bytes")
+
 
 if __name__ == "__main__":
     main()

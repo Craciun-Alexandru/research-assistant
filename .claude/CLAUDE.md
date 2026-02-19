@@ -50,7 +50,7 @@ fetch_papers (arXiv API) → prefilter (keyword/category match)
   → scorer (LLM — configurable: Gemini Flash or Claude Haiku)
   → download (HTML→TXT, PDF→TXT fallback)
   → reviewer (LLM — configurable: Gemini Pro or Claude Sonnet)
-  → digest (JSON→Markdown) → deliver (Discord webhook)
+  → digest (JSON→Markdown+HTML) → deliver (Discord and/or email)
 
 Run entire pipeline: python -m arxiv_digest
 ```

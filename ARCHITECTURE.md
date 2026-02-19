@@ -17,8 +17,8 @@ fetch → prefilter → scorer → download → reviewer → digest → deliver
 | **scorer** | `filtered_papers.json`, `user_preferences.json` | `scored_papers_summary.json` | Hybrid deterministic + LLM scoring, selects top ~25–30 |
 | **download** | `scored_papers_summary.json` | `resources/papers/<id>.txt` | Fetches full text (HTML preferred, PDF fallback) and extracts to plain text |
 | **reviewer** | `scored_papers_summary.json`, paper texts | `digest_YYYY-MM-DD.json` | Deep scholarly analysis via LLM, selects final 5–6 papers |
-| **digest** | `digest_YYYY-MM-DD.json` | `resources/digests/digest_YYYY-MM-DD.md` | Converts review JSON to formatted Markdown |
-| **deliver** | `resources/digests/digest_YYYY-MM-DD.md` | *(Discord message)* | Sends digest to Discord via `openclaw message send` |
+| **digest** | `digest_YYYY-MM-DD.json` | `resources/digests/digest_YYYY-MM-DD.md`, `digest_YYYY-MM-DD.html` | Converts review JSON to formatted Markdown and HTML |
+| **deliver** | `digest_YYYY-MM-DD.md`, `digest_YYYY-MM-DD.html` | *(Discord message and/or email)* | Delivers digest via Discord, email, or both |
 
 All intermediate JSON files live in `resources/current/` (a symlink to `resources/YYYY-MM-DD/`).
 
@@ -33,6 +33,7 @@ Each daily run creates a `resources/YYYY-MM-DD/` directory and updates the `reso
 | `scored_papers_summary.json` | `resources/current/` | scorer | download, reviewer |
 | `digest_YYYY-MM-DD.json` | `resources/current/` | reviewer | digest |
 | `digest_YYYY-MM-DD.md` | `resources/digests/` | digest | deliver |
+| `digest_YYYY-MM-DD.html` | `resources/digests/` | digest | deliver (email) |
 | `<paper_id>.txt` | `resources/papers/` | download | reviewer |
 | `download_metadata.json` | `resources/papers/` | download | download (cache) |
 
@@ -79,14 +80,16 @@ All pipeline logic lives in `pipeline/src/arxiv_digest/`:
 
 | Module | Purpose |
 |--------|---------|
-| `config.py` | All paths and constants. `WORKSPACE_ROOT`, `load_llm_config()`, `setup_daily_run()`, `ensure_directories()`. No other module hardcodes paths. |
+| `config.py` | All paths and constants. `WORKSPACE_ROOT`, `load_llm_config()`, `load_delivery_config()`, `setup_daily_run()`, `ensure_directories()`. No other module hardcodes paths. |
 | `fetch.py` | Queries arXiv API by category and date range. Respects rate limits and deduplicates across categories. |
 | `prefilter.py` | Deterministic keyword/category/avoidance filtering. No LLM calls. |
 | `scorer.py` | Hybrid scoring: deterministic component + LLM interest-alignment scoring in batches. |
 | `download.py` | HTML-first full-text retrieval (ar5iv) with PDF fallback (PyMuPDF). Extracts to plain text. Maintains `download_metadata.json` cache. |
 | `reviewer.py` | Per-paper deep scholarly analysis via LLM. Selects a diverse final set of 5–6 papers. |
-| `digest.py` | Converts review JSON into formatted Markdown. |
-| `deliver.py` | Sends Markdown digest to Discord via `openclaw message send`, splitting into message-sized chunks. |
+| `digest.py` | Converts review JSON into formatted Markdown. Also produces HTML via `digest_html.py`. |
+| `digest_html.py` | Converts review JSON into formatted HTML for email delivery. Inline CSS, paper cards, score badges. |
+| `deliver.py` | Delivery orchestrator: dispatches to Discord, email, or both based on `load_delivery_config()`. |
+| `deliver_email.py` | Email delivery via stdlib `smtplib` + `email.mime`. SMTP with STARTTLS, multipart/alternative (text + HTML). |
 | `onboard.py` | Interactive preference wizard. Uses multi-turn LLM chat to build `user_preferences.json`. Run with `python -m arxiv_digest.onboard`. |
 | `utils.py` | Shared helpers: JSON I/O (`load_json`, `save_json`), keyword extraction. |
 | `llm/` | Provider abstraction — see [LLM Abstraction Layer](#llm-abstraction-layer). |
@@ -120,8 +123,10 @@ All pipeline logic lives in `pipeline/src/arxiv_digest/`:
 │   │   ├── scorer.py                 # Hybrid scorer (deterministic + LLM)
 │   │   ├── download.py               # HTML/PDF downloader + text extraction
 │   │   ├── reviewer.py               # Deep reviewer (full-text LLM analysis)
-│   │   ├── digest.py                 # JSON → Markdown formatter
-│   │   ├── deliver.py                # Discord delivery via openclaw CLI
+│   │   ├── digest.py                 # JSON → Markdown formatter (also triggers HTML)
+│   │   ├── digest_html.py            # JSON → HTML formatter (for email)
+│   │   ├── deliver.py                # Delivery orchestrator (Discord/email/both)
+│   │   ├── deliver_email.py          # Email delivery via smtplib
 │   │   ├── onboard.py                # Interactive preference wizard
 │   │   ├── utils.py                  # Shared helpers (JSON I/O, keywords)
 │   │   └── llm/                      # LLM client abstraction
@@ -133,7 +138,9 @@ All pipeline logic lives in `pipeline/src/arxiv_digest/`:
 │       ├── conftest.py
 │       ├── test_config.py
 │       ├── test_deliver.py
+│       ├── test_deliver_email.py
 │       ├── test_digest.py
+│       ├── test_digest_html.py
 │       ├── test_prefilter.py
 │       └── test_scorer.py
 ├── scripts/                          # Thin shell wrappers for cron

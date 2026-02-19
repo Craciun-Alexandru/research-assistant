@@ -97,6 +97,54 @@ def load_llm_config() -> dict:
     }
 
 
+def load_delivery_config() -> dict:
+    """Load delivery configuration from user preferences.
+
+    Returns:
+        Dict with keys: method ("discord", "email", or "both"),
+        discord (dict with user_id), email (dict with SMTP settings).
+        Defaults to discord-only delivery for backward compatibility.
+    """
+    default_email = {
+        "smtp_host": "",
+        "smtp_port": 587,
+        "smtp_user": "",
+        "smtp_password": "",
+        "from_address": "",
+        "to_address": "",
+    }
+    default_config = {
+        "method": "discord",
+        "discord": {"user_id": DISCORD_USER_ID},
+        "email": default_email,
+    }
+
+    try:
+        with USER_PREFERENCES_PATH.open() as f:
+            prefs = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return default_config
+
+    delivery = prefs.get("delivery", {})
+    if not delivery:
+        return default_config
+
+    return {
+        "method": delivery.get("method", "discord"),
+        "discord": {
+            "user_id": delivery.get("discord", {}).get("user_id", DISCORD_USER_ID),
+        },
+        "email": {
+            "smtp_host": delivery.get("email", {}).get("smtp_host", ""),
+            "smtp_port": delivery.get("email", {}).get("smtp_port", 587),
+            "smtp_user": delivery.get("email", {}).get("smtp_user", ""),
+            "smtp_password": delivery.get("email", {}).get("smtp_password", ""),
+            "from_address": delivery.get("email", {}).get("from_address", ""),
+            "to_address": delivery.get("email", {}).get("to_address", ""),
+        },
+    }
+
+
 def ensure_directories() -> None:
     """Create data directories if they don't exist."""
     RESOURCES_DIR.mkdir(parents=True, exist_ok=True)

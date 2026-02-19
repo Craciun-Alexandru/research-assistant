@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """
-Deliver markdown digest via Discord using openclaw message send.
+Deliver digest via Discord, email, or both.
 
 Usage:
-    python -m arxiv_digest.deliver                   # Auto-detect digest_*.md in current/
+    python -m arxiv_digest.deliver                   # Auto-detect, use configured channel
+    python -m arxiv_digest.deliver --channel email   # Force email delivery
+    python -m arxiv_digest.deliver --channel both    # Force both channels
     python -m arxiv_digest.deliver --input digest_2026-02-04.md
     python -m arxiv_digest.deliver --method split --discord-user YOUR_USER_ID
 """
@@ -14,7 +16,11 @@ import sys
 import time
 from pathlib import Path
 
-from arxiv_digest.config import CURRENT_RUN_DIR, DISCORD_MAX_MESSAGE_LENGTH, DISCORD_USER_ID
+from arxiv_digest.config import (
+    CURRENT_RUN_DIR,
+    DISCORD_MAX_MESSAGE_LENGTH,
+    load_delivery_config,
+)
 
 
 def split_markdown(content: str, max_length: int = DISCORD_MAX_MESSAGE_LENGTH) -> list:
@@ -163,8 +169,57 @@ Total size: {len(content):,} characters"""
         return False
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Deliver Markdown digest via Discord")
+def deliver_all(
+    markdown_path: Path,
+    html_path: Path | None,
+    delivery_config: dict,
+    discord_method: str = "split",
+) -> bool:
+    """Dispatch delivery to discord, email, or both channels.
+
+    Args:
+        markdown_path: Path to the Markdown digest file.
+        html_path: Path to the HTML digest file (required for email).
+        delivery_config: Dict from load_delivery_config().
+        discord_method: Discord delivery method (message/split/file).
+
+    Returns:
+        True if at least one channel succeeds.
+    """
+    method = delivery_config.get("method", "discord")
+    any_success = False
+
+    # Discord delivery
+    if method in ("discord", "both"):
+        user_id = delivery_config["discord"]["user_id"]
+        print("── Discord delivery ──")
+        if deliver_digest(markdown_path, user_id, discord_method):
+            any_success = True
+            print("✓ Discord delivery succeeded")
+        else:
+            print("✗ Discord delivery failed")
+        print()
+
+    # Email delivery
+    if method in ("email", "both"):
+        if html_path and html_path.exists():
+            from arxiv_digest.deliver_email import deliver_email_digest
+
+            print("── Email delivery ──")
+            if deliver_email_digest(html_path, markdown_path, delivery_config["email"]):
+                any_success = True
+                print("✓ Email delivery succeeded")
+            else:
+                print("✗ Email delivery failed")
+        else:
+            print("✗ Email delivery skipped: no HTML digest found")
+        print()
+
+    return any_success
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Deliver digest via Discord, email, or both")
     parser.add_argument(
         "--input",
         help="Input Markdown file (default: auto-detect digest_*.md in current/)",
@@ -174,14 +229,29 @@ def main():
         "--method",
         choices=["message", "split", "file"],
         default="split",
-        help="Delivery method: message (single), split (by --- delimiter), file (reference only)",
+        help="Discord delivery method: message (single), split (by --- delimiter), file (reference only)",
+    )
+    parser.add_argument(
+        "--channel",
+        choices=["discord", "email", "both"],
+        help="Delivery channel override (default: use config from user_preferences.json)",
     )
 
     args = parser.parse_args()
 
-    # Get Discord user ID
-    user_id = args.discord_user or DISCORD_USER_ID
-    if not user_id:
+    # Load delivery config
+    config = load_delivery_config()
+
+    # Override channel if specified
+    if args.channel:
+        config["method"] = args.channel
+
+    # Override discord user if specified
+    if args.discord_user:
+        config["discord"]["user_id"] = args.discord_user
+
+    # Validate discord user if needed
+    if config["method"] in ("discord", "both") and not config["discord"]["user_id"]:
         print("Error: Discord user ID required")
         print("Set via --discord-user or DISCORD_USER_ID environment variable")
         sys.exit(1)
@@ -190,7 +260,6 @@ def main():
     if args.input:
         input_path = CURRENT_RUN_DIR / args.input
     else:
-        # Auto-detect digest_*.md in current directory
         digest_files = list(CURRENT_RUN_DIR.glob("digest_*.md"))
         if not digest_files:
             print(f"Error: No digest_*.md files found in {CURRENT_RUN_DIR}")
@@ -204,16 +273,22 @@ def main():
         print(f"Error: File not found: {input_path}")
         sys.exit(1)
 
+    # Find companion HTML file
+    html_path = input_path.with_suffix(".html")
+    if not html_path.exists():
+        html_path = None
+
     print("=" * 60)
-    print("Delivering arXiv Digest via Discord")
+    print("Delivering arXiv Digest")
     print("=" * 60)
-    print(f"File: {input_path.name}")
-    print(f"User: {user_id}")
-    print(f"Method: {args.method}")
+    print(f"Markdown: {input_path.name}")
+    print(f"HTML:     {html_path.name if html_path else '(not found)'}")
+    print(f"Channel:  {config['method']}")
+    print(f"Method:   {args.method}")
     print()
 
     # Deliver
-    success = deliver_digest(input_path, user_id, args.method)
+    success = deliver_all(input_path, html_path, config, args.method)
 
     print()
     if success:

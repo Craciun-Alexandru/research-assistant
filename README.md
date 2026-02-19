@@ -17,6 +17,7 @@ The setup script handles everything: creates a virtual environment, installs dep
 - Python 3.10+
 - A [Gemini API key](https://aistudio.google.com/apikey) (free tier works) and/or an [Anthropic API key](https://console.anthropic.com/)
 - [OpenClaw CLI](https://github.com/openclaw) *(optional — only needed for Discord delivery)*
+- For email delivery: an SMTP-capable email account (Gmail with [App Password](https://myaccount.google.com/apppasswords), Outlook, etc.)
 
 ## Manual Pipeline Run
 
@@ -61,7 +62,7 @@ When installed via `setup.sh`, the pipeline runs daily:
 | 07:05 | `score_papers.sh`      | LLM hybrid scoring                |
 | 07:10 | `download_papers.sh`   | Download full paper texts         |
 | 07:20 | `review_papers.sh`     | Deep review via LLM               |
-| 07:59 | `digest_deliver.sh`    | Format Markdown + send to Discord |
+| 07:59 | `digest_deliver.sh`    | Format Markdown/HTML + deliver (Discord/email) |
 
 Logs are appended to `~/cron_digest.log`.
 
@@ -110,6 +111,28 @@ All user configuration lives in `user_preferences.json` (created by `setup.sh` �
 ```
 
 Supported providers: `gemini` (default) and `claude`. The scorer uses a fast model for bulk scoring; the reviewer uses a stronger model for deep analysis. `setup.sh` configures these automatically.
+
+### Delivery Settings
+
+```json
+{
+  "delivery": {
+    "method": "both",
+    "discord": { "user_id": "1103007117671157760" },
+    "email": {
+      "smtp_host": "smtp.gmail.com",
+      "smtp_port": 587,
+      "smtp_user": "you@gmail.com",
+      "smtp_password": "your-app-password",
+      "from_address": "you@gmail.com",
+      "to_address": "you@gmail.com"
+    }
+  }
+}
+```
+
+- **method**: `"discord"` (default), `"email"`, or `"both"`
+- Email uses SMTP with STARTTLS (no extra dependencies — stdlib only)
 
 ## Project Structure
 
