@@ -174,7 +174,7 @@ echo
 
 echo "── Step 2b: Model selection ──"
 
-if [ -n "$API_KEY" ]; then
+if [ -n "$API_KEY" ] || [ -n "$CLAUDE_API_KEY" ]; then
     # Write model selection script to a temp file so stdin stays on the terminal
     _MODEL_SCRIPT=$(mktemp)
     trap 'rm -f "$_MODEL_SCRIPT"' EXIT
@@ -182,88 +182,123 @@ if [ -n "$API_KEY" ]; then
 import json
 import sys
 
-from google import genai
-
 prefs_path = sys.argv[1]
 
-# Read current prefs
 with open(prefs_path) as f:
     prefs = json.load(f)
 
-api_key = prefs.get("llm", {}).get("api_key", "")
-if not api_key:
-    print("No API key found, skipping model selection.")
+llm = prefs.setdefault("llm", {})
+gemini_key = llm.get("api_key", "")
+claude_key = llm.get("claude_api_key", "")
+has_gemini = bool(gemini_key)
+has_claude = bool(claude_key)
+
+if not has_gemini and not has_claude:
+    print("No API keys configured, skipping model selection.")
     sys.exit(0)
 
-client = genai.Client(api_key=api_key)
+# ── Provider selection ────────────────────────────────────────────
+old_provider = llm.get("provider", "gemini" if has_gemini else "claude")
 
-# Fetch available models
-try:
-    models_response = client.models.list()
-    all_models = [m.name for m in models_response if "generateContent" in (m.supported_actions or [])]
-except Exception as e:
-    print(f"Could not list models: {e}")
-    print("Using defaults: gemini-2.0-flash (scorer), gemini-2.5-pro (reviewer)")
-    prefs["llm"]["scorer_model"] = "gemini-2.0-flash"
-    prefs["llm"]["reviewer_model"] = "gemini-2.5-pro"
-    with open(prefs_path, "w") as f:
-        json.dump(prefs, f, indent=2)
-    sys.exit(0)
-
-# Split into flash-class and pro-class
-flash_models = [m for m in all_models if "flash" in m.lower()]
-pro_models = [m for m in all_models if "pro" in m.lower()]
-
-# Scorer model (flash-class)
-print("\nAvailable flash-class models (for scoring):")
-for i, m in enumerate(flash_models, 1):
-    # Strip "models/" prefix for display
-    display = m.replace("models/", "")
-    print(f"  {i}. {display}")
-
-current_scorer = prefs.get("llm", {}).get("scorer_model", "")
-if current_scorer:
-    print(f"\n  Current: {current_scorer}")
-    choice = input("  Pick a number (Enter to keep current): ").strip()
+if has_gemini and has_claude:
+    options = ["gemini", "claude"]
+    print("\nBoth Gemini and Claude API keys are configured.")
+    for i, p in enumerate(options, 1):
+        marker = "  ← current" if p == old_provider else ""
+        print(f"  {i}. {p}{marker}")
+    choice = input("  Pick provider (Enter to keep current): ").strip()
+    if choice.isdigit() and 1 <= int(choice) <= len(options):
+        provider = options[int(choice) - 1]
+    else:
+        provider = old_provider
+    print(f"  Provider: {provider}")
+elif has_claude:
+    provider = "claude"
+    if old_provider != "claude":
+        print("  Using Claude (only Claude API key configured)")
 else:
-    choice = input("  Pick a number: ").strip()
+    provider = "gemini"
+    if old_provider != "gemini":
+        print("  Using Gemini (only Gemini API key configured)")
 
-if choice.isdigit() and 1 <= int(choice) <= len(flash_models):
-    selected = flash_models[int(choice) - 1].replace("models/", "")
-    prefs["llm"]["scorer_model"] = selected
-    print(f"  Selected: {selected}")
-elif not choice and current_scorer:
-    print(f"  Keeping: {current_scorer}")
-else:
-    default = flash_models[0].replace("models/", "") if flash_models else "gemini-2.0-flash"
-    prefs["llm"]["scorer_model"] = default
-    print(f"  Using default: {default}")
+llm["provider"] = provider
 
-# Reviewer model (pro-class)
-print("\nAvailable pro-class models (for deep review):")
-for i, m in enumerate(pro_models, 1):
-    display = m.replace("models/", "")
-    print(f"  {i}. {display}")
+# Clear stale model selections when provider changes
+if provider != old_provider:
+    llm.pop("scorer_model", None)
+    llm.pop("reviewer_model", None)
 
-current_reviewer = prefs.get("llm", {}).get("reviewer_model", "")
-if current_reviewer:
-    print(f"\n  Current: {current_reviewer}")
-    choice = input("  Pick a number (Enter to keep current): ").strip()
-else:
-    choice = input("  Pick a number: ").strip()
 
-if choice.isdigit() and 1 <= int(choice) <= len(pro_models):
-    selected = pro_models[int(choice) - 1].replace("models/", "")
-    prefs["llm"]["reviewer_model"] = selected
-    print(f"  Selected: {selected}")
-elif not choice and current_reviewer:
-    print(f"  Keeping: {current_reviewer}")
-else:
-    default = pro_models[0].replace("models/", "") if pro_models else "gemini-2.5-pro"
-    prefs["llm"]["reviewer_model"] = default
-    print(f"  Using default: {default}")
+def _pick(label, models, current):
+    """Print a numbered list and return the user's choice."""
+    print(f"\n{label}:")
+    for i, m in enumerate(models, 1):
+        print(f"  {i}. {m}")
+    if current:
+        print(f"\n  Current: {current}")
+        choice = input("  Pick a number (Enter to keep current): ").strip()
+    else:
+        choice = input("  Pick a number: ").strip()
+    if choice.isdigit() and 1 <= int(choice) <= len(models):
+        selected = models[int(choice) - 1]
+        print(f"  Selected: {selected}")
+        return selected
+    if not choice and current:
+        print(f"  Keeping: {current}")
+        return current
+    default = models[0] if models else None
+    if default:
+        print(f"  Using default: {default}")
+    return default
 
-# Save
+
+# ── Gemini model selection ────────────────────────────────────────
+if provider == "gemini":
+    from google import genai
+    client = genai.Client(api_key=gemini_key)
+    try:
+        all_models = [
+            m.name for m in client.models.list()
+            if "generateContent" in (m.supported_actions or [])
+        ]
+    except Exception as e:
+        print(f"Could not list Gemini models: {e}")
+        llm.setdefault("scorer_model", "gemini-2.0-flash")
+        llm.setdefault("reviewer_model", "gemini-2.5-pro")
+        with open(prefs_path, "w") as f:
+            json.dump(prefs, f, indent=2)
+        sys.exit(0)
+
+    flash = [m.replace("models/", "") for m in all_models if "flash" in m.lower()]
+    pro   = [m.replace("models/", "") for m in all_models if "pro"   in m.lower()]
+
+    scorer   = _pick("Available flash-class models (for scoring)",   flash, llm.get("scorer_model", ""))
+    reviewer = _pick("Available pro-class models (for deep review)", pro,   llm.get("reviewer_model", ""))
+    llm["scorer_model"]   = scorer   or "gemini-2.0-flash"
+    llm["reviewer_model"] = reviewer or "gemini-2.5-pro"
+
+# ── Claude model selection ────────────────────────────────────────
+elif provider == "claude":
+    import anthropic
+    client = anthropic.Anthropic(api_key=claude_key)
+    try:
+        all_ids = [m.id for m in client.models.list()]
+    except Exception as e:
+        print(f"Could not list Claude models: {e}")
+        llm.setdefault("scorer_model", "claude-haiku-4-5-20251001")
+        llm.setdefault("reviewer_model", "claude-sonnet-4-6")
+        with open(prefs_path, "w") as f:
+            json.dump(prefs, f, indent=2)
+        sys.exit(0)
+
+    fast      = [m for m in all_ids if "haiku"  in m.lower() or "sonnet" in m.lower()]
+    powerful  = [m for m in all_ids if "sonnet" in m.lower() or "opus"   in m.lower()]
+
+    scorer   = _pick("Available fast models (for scoring)",          fast,     llm.get("scorer_model", ""))
+    reviewer = _pick("Available powerful models (for deep review)",  powerful, llm.get("reviewer_model", ""))
+    llm["scorer_model"]   = scorer   or "claude-haiku-4-5-20251001"
+    llm["reviewer_model"] = reviewer or "claude-sonnet-4-6"
+
 with open(prefs_path, "w") as f:
     json.dump(prefs, f, indent=2)
 print("\nModel selections saved.")
@@ -271,7 +306,7 @@ PYEOF
     "$VENV_PYTHON" "$_MODEL_SCRIPT" "$PREFS"
     rm -f "$_MODEL_SCRIPT"
 else
-    echo "Skipped (no API key)."
+    echo "Skipped (no API keys configured)."
 fi
 echo
 
