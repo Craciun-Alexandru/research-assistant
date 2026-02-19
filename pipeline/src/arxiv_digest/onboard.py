@@ -142,19 +142,18 @@ def main() -> None:
     print("=" * 48)
     print()
 
-    # Load existing prefs for LLM config
+    # Load existing prefs for merging later; load LLM config via the
+    # provider-aware helper so the api_key field is always correct.
     existing_prefs = _load_existing_prefs()
-    llm_config = existing_prefs.get("llm")
-    if not llm_config:
-        try:
-            llm_config = load_llm_config()
-        except Exception:
-            print(f"Error: No LLM configuration found in {USER_PREFERENCES_PATH}")
-            print("Run setup.sh first to configure your API key.")
-            sys.exit(1)
+    try:
+        llm_config = load_llm_config()
+    except Exception:
+        print(f"Error: No LLM configuration found in {USER_PREFERENCES_PATH}")
+        print("Run setup.sh first to configure your API key.")
+        sys.exit(1)
 
     api_key = llm_config.get("api_key", "")
-    if not api_key or api_key == "YOUR_GEMINI_API_KEY_HERE":
+    if not api_key:
         print("Error: No valid API key found.")
         print("Run setup.sh first to configure your API key.")
         sys.exit(1)
