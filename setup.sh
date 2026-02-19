@@ -108,6 +108,68 @@ print('OK — connected to Gemini API')
 fi
 echo
 
+# ── 2c. Claude API key (optional) ────────────────────────────────
+
+echo "── Step 2c: Claude API key (optional) ──"
+
+EXISTING_CLAUDE_KEY=""
+if [ -f "$PREFS" ]; then
+    EXISTING_CLAUDE_KEY=$("$VENV_PYTHON" -c "
+import json
+with open('$PREFS') as f:
+    p = json.load(f)
+k = p.get('llm', {}).get('claude_api_key', '')
+if k and k != 'YOUR_ANTHROPIC_API_KEY_HERE':
+    print(k)
+" 2>/dev/null || true)
+fi
+
+if [ -n "$EXISTING_CLAUDE_KEY" ]; then
+    echo "Claude API key already configured (starts with ${EXISTING_CLAUDE_KEY%"${EXISTING_CLAUDE_KEY#????}"}...)."
+    printf "Keep existing key? [Y/n] "
+    read -r KEEP_CLAUDE_KEY || true
+    case "$KEEP_CLAUDE_KEY" in
+        [nN]*) EXISTING_CLAUDE_KEY="" ;;
+    esac
+fi
+
+CLAUDE_API_KEY="$EXISTING_CLAUDE_KEY"
+if [ -z "$EXISTING_CLAUDE_KEY" ]; then
+    printf "Enter your Anthropic API key (Enter to skip): "
+    read -r CLAUDE_API_KEY || true
+fi
+
+if [ -n "$CLAUDE_API_KEY" ]; then
+    "$VENV_PYTHON" -c "
+import json, os
+prefs_path = '$PREFS'
+if os.path.exists(prefs_path):
+    with open(prefs_path) as f:
+        p = json.load(f)
+else:
+    p = {}
+p.setdefault('llm', {})['claude_api_key'] = '$CLAUDE_API_KEY'
+with open(prefs_path, 'w') as f:
+    json.dump(p, f, indent=2)
+"
+    echo "Claude API key saved."
+
+    echo "Verifying Claude API key..."
+    if "$VENV_PYTHON" -c "
+import anthropic
+c = anthropic.Anthropic(api_key='$CLAUDE_API_KEY')
+c.models.retrieve('claude-haiku-4-5-20251001')
+print('OK — connected to Anthropic API')
+" 2>/dev/null; then
+        true
+    else
+        echo "Warning: Could not verify Claude API key. Check it in user_preferences.json."
+    fi
+else
+    echo "Skipped. You can add it later as llm.claude_api_key in user_preferences.json."
+fi
+echo
+
 # ── 2b. Model selection ───────────────────────────────────────────
 
 echo "── Step 2b: Model selection ──"
