@@ -1,11 +1,13 @@
 # arXiv Digest Pipeline
 
-Automated daily arXiv paper curation system. Fetches papers, pre-filters by keywords, scores and reviews via Gemini API, downloads full texts, generates digest, delivers via Discord.
+Automated daily arXiv paper curation system. Fetches papers, pre-filters by keywords, scores and reviews via LLM, downloads full texts, generates digest, delivers via Discord.
+
+For internal design details, see [ARCHITECTURE.md](../ARCHITECTURE.md).
 
 ## Stack
 
-- Python 3.12+, no frameworks
-- Dependencies: requests, beautifulsoup4, PyMuPDF (fitz), google-genai
+- Python 3.10+, no frameworks
+- Dependencies: requests, beautifulsoup4, PyMuPDF (fitz), google-genai, anthropic
 - Linting/formatting: ruff
 - Package: `src/arxiv_digest/` (PEP 621, pyproject.toml)
 - Install for dev: `pip install -e ".[dev]" --break-system-packages`
@@ -25,11 +27,11 @@ make install       # pip install -e ".[dev]"
 pipeline/
   src/arxiv_digest/     # Python package — all pipeline logic lives here
     config.py           # ALL paths and constants. Never hardcode workspace paths elsewhere.
-    llm/                # LLM client abstraction (Gemini backend)
+    llm/                # LLM client abstraction (Gemini + Claude backends)
     onboard.py          # Interactive preference wizard (python -m arxiv_digest.onboard)
+  tests/                # pytest
 scripts/              # Thin shell wrappers for cron jobs (call python -m arxiv_digest.*)
 resources/            # Data directory (papers, digests, JSON intermediates)
-tests/                # pytest
 ```
 
 ## Code Conventions
