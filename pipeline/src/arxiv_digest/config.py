@@ -72,15 +72,28 @@ def load_llm_config() -> dict:
 
     Returns:
         Dict with keys: provider, scorer_model, reviewer_model, api_key.
+        ``api_key`` is automatically selected for the active provider
+        (``llm.api_key`` for Gemini, ``llm.claude_api_key`` for Claude).
     """
     with USER_PREFERENCES_PATH.open() as f:
         prefs = json.load(f)
     llm = prefs.get("llm", {})
+    provider = llm.get("provider", "gemini")
+
+    if provider == "claude":
+        api_key = llm.get("claude_api_key", "")
+        scorer_default = "claude-haiku-4-5-20251001"
+        reviewer_default = "claude-sonnet-4-6"
+    else:  # gemini
+        api_key = llm.get("api_key", "")
+        scorer_default = "gemini-2.0-flash"
+        reviewer_default = "gemini-2.5-pro"
+
     return {
-        "provider": llm.get("provider", "gemini"),
-        "scorer_model": llm.get("scorer_model", "gemini-2.0-flash"),
-        "reviewer_model": llm.get("reviewer_model", "gemini-2.5-pro"),
-        "api_key": llm.get("api_key", ""),
+        "provider": provider,
+        "scorer_model": llm.get("scorer_model", scorer_default),
+        "reviewer_model": llm.get("reviewer_model", reviewer_default),
+        "api_key": api_key,
     }
 
 

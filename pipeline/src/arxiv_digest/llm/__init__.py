@@ -14,7 +14,7 @@ def create_client(provider: str, **kwargs: object) -> LLMClient:
     """Instantiate an LLM client for the given *provider*.
 
     Args:
-        provider: Backend name (currently only ``"gemini"``).
+        provider: Backend name — ``"gemini"`` or ``"claude"``.
         **kwargs: Forwarded to the provider constructor (e.g. ``api_key``).
 
     Returns:
@@ -27,6 +27,11 @@ def create_client(provider: str, **kwargs: object) -> LLMClient:
         from arxiv_digest.llm.gemini import GeminiClient
 
         return GeminiClient(**kwargs)  # type: ignore[arg-type]
+
+    if provider == "claude":
+        from arxiv_digest.llm.claude import ClaudeClient
+
+        return ClaudeClient(**kwargs)  # type: ignore[arg-type]
 
     raise ValueError(f"Unknown LLM provider: {provider!r}")
 
