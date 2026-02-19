@@ -41,19 +41,75 @@ echo "Installing dependencies..."
 echo "Dependencies installed."
 echo
 
-# ── 2. Gemini API key ──────────────────────────────────────────────
+# ── 2. LLM provider ─────────────────────────────────────────────────
 
-echo "── Step 2: Gemini API key ──"
+echo "── Step 2: LLM provider ──"
 
-# Check if key is already set in preferences
+CURRENT_PROVIDER="gemini"
+if [ -f "$PREFS" ]; then
+    CURRENT_PROVIDER=$("$VENV_PYTHON" -c "
+import json
+with open('$PREFS') as f:
+    p = json.load(f)
+print(p.get('llm', {}).get('provider', 'gemini'))
+" 2>/dev/null || echo "gemini")
+fi
+
+echo "  1. gemini  (Google Gemini)"
+echo "  2. claude  (Anthropic Claude)"
+echo "  Current: $CURRENT_PROVIDER"
+printf "  Pick provider (Enter to keep current): "
+read -r PROVIDER_CHOICE || true
+case "$PROVIDER_CHOICE" in
+    1) PROVIDER="gemini" ;;
+    2) PROVIDER="claude" ;;
+    *) PROVIDER="$CURRENT_PROVIDER" ;;
+esac
+echo "  Using: $PROVIDER"
+
+# Save provider; clear stale model selections if it changed
+"$VENV_PYTHON" -c "
+import json, os
+prefs_path = '$PREFS'
+if os.path.exists(prefs_path):
+    with open(prefs_path) as f:
+        p = json.load(f)
+else:
+    p = {}
+llm = p.setdefault('llm', {})
+if llm.get('provider') != '$PROVIDER':
+    llm.pop('scorer_model', None)
+    llm.pop('reviewer_model', None)
+llm['provider'] = '$PROVIDER'
+with open(prefs_path, 'w') as f:
+    json.dump(p, f, indent=2)
+"
+echo
+
+# ── 2a. Active provider API key ────────────────────────────────────
+
+if [ "$PROVIDER" = "gemini" ]; then
+    echo "── Step 2a: Gemini API key ──"
+    _KEY_FIELD="api_key"
+    _KEY_SENTINEL="YOUR_GEMINI_API_KEY_HERE"
+    _KEY_LABEL="Gemini"
+    _KEY_VERIFY_PY="from google import genai; c = genai.Client(api_key='__KEY__'); c.models.get(model='gemini-2.0-flash'); print('OK — connected to Gemini API')"
+else
+    echo "── Step 2a: Anthropic API key ──"
+    _KEY_FIELD="claude_api_key"
+    _KEY_SENTINEL="YOUR_ANTHROPIC_API_KEY_HERE"
+    _KEY_LABEL="Anthropic"
+    _KEY_VERIFY_PY="import anthropic; c = anthropic.Anthropic(api_key='__KEY__'); c.models.retrieve('claude-haiku-4-5-20251001'); print('OK — connected to Anthropic API')"
+fi
+
 EXISTING_KEY=""
 if [ -f "$PREFS" ]; then
     EXISTING_KEY=$("$VENV_PYTHON" -c "
 import json
 with open('$PREFS') as f:
     p = json.load(f)
-k = p.get('llm', {}).get('api_key', '')
-if k and k != 'YOUR_GEMINI_API_KEY_HERE':
+k = p.get('llm', {}).get('$_KEY_FIELD', '')
+if k and k != '$_KEY_SENTINEL':
     print(k)
 " 2>/dev/null || true)
 fi
@@ -67,17 +123,16 @@ if [ -n "$EXISTING_KEY" ]; then
     esac
 fi
 
-API_KEY="$EXISTING_KEY"
+ACTIVE_API_KEY="$EXISTING_KEY"
 if [ -z "$EXISTING_KEY" ]; then
-    printf "Enter your Gemini API key: "
-    read -r API_KEY || true
-    if [ -z "$API_KEY" ]; then
+    printf "Enter your $_KEY_LABEL API key: "
+    read -r ACTIVE_API_KEY || true
+    if [ -z "$ACTIVE_API_KEY" ]; then
         echo "Warning: No API key provided. You can set it later in user_preferences.json."
     fi
 fi
 
-if [ -n "$API_KEY" ]; then
-    # Write minimal prefs file with API key
+if [ -n "$ACTIVE_API_KEY" ]; then
     "$VENV_PYTHON" -c "
 import json, os
 prefs_path = '$PREFS'
@@ -86,21 +141,14 @@ if os.path.exists(prefs_path):
         p = json.load(f)
 else:
     p = {}
-p.setdefault('llm', {})['api_key'] = '$API_KEY'
-p['llm'].setdefault('provider', 'gemini')
+p.setdefault('llm', {})['$_KEY_FIELD'] = '$ACTIVE_API_KEY'
 with open(prefs_path, 'w') as f:
     json.dump(p, f, indent=2)
 "
     echo "API key saved."
-
-    # Quick verification
     echo "Verifying API key..."
-    if "$VENV_PYTHON" -c "
-from google import genai
-c = genai.Client(api_key='$API_KEY')
-r = c.models.get(model='gemini-2.0-flash')
-print('OK — connected to Gemini API')
-" 2>/dev/null; then
+    _VERIFY=$(echo "$_KEY_VERIFY_PY" | sed "s|__KEY__|$ACTIVE_API_KEY|g")
+    if "$VENV_PYTHON" -c "$_VERIFY" 2>/dev/null; then
         true
     else
         echo "Warning: Could not verify API key. Check it in user_preferences.json."
@@ -108,73 +156,77 @@ print('OK — connected to Gemini API')
 fi
 echo
 
-# ── 2c. Claude API key (optional) ────────────────────────────────
+# ── 2b. Other provider API key (optional) ─────────────────────────
 
-echo "── Step 2c: Claude API key (optional) ──"
+if [ "$PROVIDER" = "gemini" ]; then
+    echo "── Step 2b: Anthropic API key (optional) ──"
+    _OTHER_FIELD="claude_api_key"
+    _OTHER_SENTINEL="YOUR_ANTHROPIC_API_KEY_HERE"
+    _OTHER_LABEL="Anthropic"
+    _OTHER_VERIFY_PY="import anthropic; c = anthropic.Anthropic(api_key='__KEY__'); c.models.retrieve('claude-haiku-4-5-20251001'); print('OK — connected to Anthropic API')"
+else
+    echo "── Step 2b: Gemini API key (optional) ──"
+    _OTHER_FIELD="api_key"
+    _OTHER_SENTINEL="YOUR_GEMINI_API_KEY_HERE"
+    _OTHER_LABEL="Gemini"
+    _OTHER_VERIFY_PY="from google import genai; c = genai.Client(api_key='__KEY__'); c.models.get(model='gemini-2.0-flash'); print('OK — connected to Gemini API')"
+fi
 
-EXISTING_CLAUDE_KEY=""
+EXISTING_OTHER_KEY=""
 if [ -f "$PREFS" ]; then
-    EXISTING_CLAUDE_KEY=$("$VENV_PYTHON" -c "
+    EXISTING_OTHER_KEY=$("$VENV_PYTHON" -c "
 import json
 with open('$PREFS') as f:
     p = json.load(f)
-k = p.get('llm', {}).get('claude_api_key', '')
-if k and k != 'YOUR_ANTHROPIC_API_KEY_HERE':
+k = p.get('llm', {}).get('$_OTHER_FIELD', '')
+if k and k != '$_OTHER_SENTINEL':
     print(k)
 " 2>/dev/null || true)
 fi
 
-if [ -n "$EXISTING_CLAUDE_KEY" ]; then
-    echo "Claude API key already configured (starts with ${EXISTING_CLAUDE_KEY%"${EXISTING_CLAUDE_KEY#????}"}...)."
+if [ -n "$EXISTING_OTHER_KEY" ]; then
+    echo "$_OTHER_LABEL API key already configured (starts with ${EXISTING_OTHER_KEY%"${EXISTING_OTHER_KEY#????}"}...)."
     printf "Keep existing key? [Y/n] "
-    read -r KEEP_CLAUDE_KEY || true
-    case "$KEEP_CLAUDE_KEY" in
-        [nN]*) EXISTING_CLAUDE_KEY="" ;;
+    read -r KEEP_OTHER || true
+    case "$KEEP_OTHER" in
+        [nN]*) EXISTING_OTHER_KEY="" ;;
     esac
 fi
 
-CLAUDE_API_KEY="$EXISTING_CLAUDE_KEY"
-if [ -z "$EXISTING_CLAUDE_KEY" ]; then
-    printf "Enter your Anthropic API key (Enter to skip): "
-    read -r CLAUDE_API_KEY || true
+OTHER_API_KEY="$EXISTING_OTHER_KEY"
+if [ -z "$EXISTING_OTHER_KEY" ]; then
+    printf "Enter your $_OTHER_LABEL API key (Enter to skip): "
+    read -r OTHER_API_KEY || true
 fi
 
-if [ -n "$CLAUDE_API_KEY" ]; then
+if [ -n "$OTHER_API_KEY" ]; then
     "$VENV_PYTHON" -c "
-import json, os
+import json
 prefs_path = '$PREFS'
-if os.path.exists(prefs_path):
-    with open(prefs_path) as f:
-        p = json.load(f)
-else:
-    p = {}
-p.setdefault('llm', {})['claude_api_key'] = '$CLAUDE_API_KEY'
+with open(prefs_path) as f:
+    p = json.load(f)
+p['llm']['$_OTHER_FIELD'] = '$OTHER_API_KEY'
 with open(prefs_path, 'w') as f:
     json.dump(p, f, indent=2)
 "
-    echo "Claude API key saved."
-
-    echo "Verifying Claude API key..."
-    if "$VENV_PYTHON" -c "
-import anthropic
-c = anthropic.Anthropic(api_key='$CLAUDE_API_KEY')
-c.models.retrieve('claude-haiku-4-5-20251001')
-print('OK — connected to Anthropic API')
-" 2>/dev/null; then
+    echo "$_OTHER_LABEL API key saved."
+    echo "Verifying..."
+    _OTHER_VERIFY=$(echo "$_OTHER_VERIFY_PY" | sed "s|__KEY__|$OTHER_API_KEY|g")
+    if "$VENV_PYTHON" -c "$_OTHER_VERIFY" 2>/dev/null; then
         true
     else
-        echo "Warning: Could not verify Claude API key. Check it in user_preferences.json."
+        echo "Warning: Could not verify $_OTHER_LABEL API key."
     fi
 else
-    echo "Skipped. You can add it later as llm.claude_api_key in user_preferences.json."
+    echo "Skipped. You can add it later as llm.$_OTHER_FIELD in user_preferences.json."
 fi
 echo
 
-# ── 2b. Model selection ───────────────────────────────────────────
+# ── 2c. Model selection ───────────────────────────────────────────
 
-echo "── Step 2b: Model selection ──"
+echo "── Step 2c: Model selection ──"
 
-if [ -n "$API_KEY" ] || [ -n "$CLAUDE_API_KEY" ]; then
+if [ -n "$ACTIVE_API_KEY" ]; then
     # Write model selection script to a temp file so stdin stays on the terminal
     _MODEL_SCRIPT=$(mktemp)
     trap 'rm -f "$_MODEL_SCRIPT"' EXIT
@@ -188,45 +240,9 @@ with open(prefs_path) as f:
     prefs = json.load(f)
 
 llm = prefs.setdefault("llm", {})
+provider = llm.get("provider", "gemini")
 gemini_key = llm.get("api_key", "")
 claude_key = llm.get("claude_api_key", "")
-has_gemini = bool(gemini_key)
-has_claude = bool(claude_key)
-
-if not has_gemini and not has_claude:
-    print("No API keys configured, skipping model selection.")
-    sys.exit(0)
-
-# ── Provider selection ────────────────────────────────────────────
-old_provider = llm.get("provider", "gemini" if has_gemini else "claude")
-
-if has_gemini and has_claude:
-    options = ["gemini", "claude"]
-    print("\nBoth Gemini and Claude API keys are configured.")
-    for i, p in enumerate(options, 1):
-        marker = "  ← current" if p == old_provider else ""
-        print(f"  {i}. {p}{marker}")
-    choice = input("  Pick provider (Enter to keep current): ").strip()
-    if choice.isdigit() and 1 <= int(choice) <= len(options):
-        provider = options[int(choice) - 1]
-    else:
-        provider = old_provider
-    print(f"  Provider: {provider}")
-elif has_claude:
-    provider = "claude"
-    if old_provider != "claude":
-        print("  Using Claude (only Claude API key configured)")
-else:
-    provider = "gemini"
-    if old_provider != "gemini":
-        print("  Using Gemini (only Gemini API key configured)")
-
-llm["provider"] = provider
-
-# Clear stale model selections when provider changes
-if provider != old_provider:
-    llm.pop("scorer_model", None)
-    llm.pop("reviewer_model", None)
 
 
 def _pick(label, models, current):
@@ -252,8 +268,10 @@ def _pick(label, models, current):
     return default
 
 
-# ── Gemini model selection ────────────────────────────────────────
 if provider == "gemini":
+    if not gemini_key:
+        print("No Gemini API key configured, skipping model selection.")
+        sys.exit(0)
     from google import genai
     client = genai.Client(api_key=gemini_key)
     try:
@@ -277,8 +295,10 @@ if provider == "gemini":
     llm["scorer_model"]   = scorer   or "gemini-2.0-flash"
     llm["reviewer_model"] = reviewer or "gemini-2.5-pro"
 
-# ── Claude model selection ────────────────────────────────────────
 elif provider == "claude":
+    if not claude_key:
+        print("No Claude API key configured, skipping model selection.")
+        sys.exit(0)
     import anthropic
     client = anthropic.Anthropic(api_key=claude_key)
     try:
@@ -291,8 +311,8 @@ elif provider == "claude":
             json.dump(prefs, f, indent=2)
         sys.exit(0)
 
-    fast      = [m for m in all_ids if "haiku"  in m.lower() or "sonnet" in m.lower()]
-    powerful  = [m for m in all_ids if "sonnet" in m.lower() or "opus"   in m.lower()]
+    fast     = [m for m in all_ids if "haiku"  in m.lower() or "sonnet" in m.lower()]
+    powerful = [m for m in all_ids if "sonnet" in m.lower() or "opus"   in m.lower()]
 
     scorer   = _pick("Available fast models (for scoring)",          fast,     llm.get("scorer_model", ""))
     reviewer = _pick("Available powerful models (for deep review)",  powerful, llm.get("reviewer_model", ""))
@@ -306,7 +326,7 @@ PYEOF
     "$VENV_PYTHON" "$_MODEL_SCRIPT" "$PREFS"
     rm -f "$_MODEL_SCRIPT"
 else
-    echo "Skipped (no API keys configured)."
+    echo "Skipped (no active API key configured)."
 fi
 echo
 
@@ -314,7 +334,7 @@ echo
 
 echo "── Step 3: Research preferences ──"
 
-if [ -n "$API_KEY" ]; then
+if [ -n "$ACTIVE_API_KEY" ]; then
     # Check if research preferences already exist
     HAS_RESEARCH=$("$VENV_PYTHON" -c "
 import json
@@ -342,7 +362,7 @@ if areas:
         "$VENV_PYTHON" -m arxiv_digest.onboard
     fi
 else
-    echo "Skipped (no API key). Run the wizard later with:"
+    echo "Skipped (no API key configured). Run the wizard later with:"
     echo "  $VENV_PYTHON -m arxiv_digest.onboard"
 fi
 echo
@@ -361,9 +381,9 @@ echo "── Step 5: Cron jobs ──"
 echo
 echo "The daily pipeline runs via cron at these times:"
 echo "  07:00  fetch + prefilter"
-echo "  07:05  score papers (Gemini Flash)"
+echo "  07:05  score papers (LLM scorer)"
 echo "  07:10  download full texts"
-echo "  07:20  deep review (Gemini Pro)"
+echo "  07:20  deep review (LLM reviewer)"
 echo "  07:59  digest + deliver"
 echo
 
