@@ -344,6 +344,13 @@ def main():
     else:
         print("⚠️  No PDF text extraction available")
 
+    # Remove stale .txt files from previous runs
+    old_txts = list(OUTPUT_DIR.glob("*.txt"))
+    if old_txts:
+        print(f"🗑  Removing {len(old_txts)} stale .txt file(s) from previous runs...")
+        for f in old_txts:
+            f.unlink()
+
     # Create downloader
     downloader = PaperDownloader(OUTPUT_DIR)
     print(f"✓ Output directory: {OUTPUT_DIR.absolute()}\n")
