@@ -1,6 +1,6 @@
 # arXiv Research Digest
 
-Automated daily pipeline that fetches papers from arXiv, scores them against your research interests, and delivers a curated digest to Discord.
+Automated daily pipeline that fetches papers from arXiv, scores them against your research interests, and delivers a curated digest via email.
 
 ## Quick Start
 
@@ -16,8 +16,7 @@ The setup script handles everything: creates a virtual environment, installs dep
 
 - Python 3.10+
 - A [Gemini API key](https://aistudio.google.com/apikey) (free tier works) and/or an [Anthropic API key](https://console.anthropic.com/)
-- [OpenClaw CLI](https://github.com/openclaw) *(optional — only needed for Discord delivery)*
-- For email delivery: an SMTP-capable email account (Gmail with [App Password](https://myaccount.google.com/apppasswords), Outlook, etc.)
+- An SMTP-capable email account (Gmail with [App Password](https://myaccount.google.com/apppasswords), Outlook, etc.)
 
 ## Manual Pipeline Run
 
@@ -62,7 +61,7 @@ When installed via `setup.sh`, the pipeline runs daily:
 | 07:05 | `score_papers.sh`      | LLM hybrid scoring                |
 | 07:10 | `download_papers.sh`   | Download full paper texts         |
 | 07:20 | `review_papers.sh`     | Deep review via LLM               |
-| 07:59 | `digest_deliver.sh`    | Format Markdown/HTML + deliver (Discord/email) |
+| 07:59 | `digest_deliver.sh`    | Format Markdown/HTML + deliver via email |
 
 Logs are appended to `~/cron_digest.log`.
 
@@ -117,8 +116,6 @@ Supported providers: `gemini` (default) and `claude`. The scorer uses a fast mod
 ```json
 {
   "delivery": {
-    "method": "both",
-    "discord": { "user_id": "1103007117671157760" },
     "email": {
       "smtp_host": "smtp.gmail.com",
       "smtp_port": 587,
@@ -131,8 +128,7 @@ Supported providers: `gemini` (default) and `claude`. The scorer uses a fast mod
 }
 ```
 
-- **method**: `"discord"` (default), `"email"`, or `"both"`
-- Email uses SMTP with STARTTLS (no extra dependencies — stdlib only)
+- Delivery is via email only, using SMTP with STARTTLS (stdlib only — no extra dependencies)
 
 ## Project Structure
 

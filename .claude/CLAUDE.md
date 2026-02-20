@@ -1,6 +1,6 @@
 # arXiv Digest Pipeline
 
-Automated daily arXiv paper curation system. Fetches papers, pre-filters by keywords, scores and reviews via LLM, downloads full texts, generates digest, delivers via Discord.
+Automated daily arXiv paper curation system. Fetches papers, pre-filters by keywords, scores and reviews via LLM, downloads full texts, generates digest, delivers via email.
 
 For internal design details, see [ARCHITECTURE.md](../ARCHITECTURE.md).
 
@@ -51,7 +51,7 @@ fetch_papers (arXiv API) → prefilter (keyword/category match)
   → scorer (LLM — configurable: Gemini Flash or Claude Haiku)
   → download (LaTeX source → body TXT, appendices stripped)
   → reviewer (LLM — configurable: Gemini Pro or Claude Sonnet)
-  → digest (JSON→Markdown+HTML) → deliver (Discord and/or email)
+  → digest (JSON→Markdown+HTML) → deliver (email)
 
 Run entire pipeline: python -m arxiv_digest
 ```

@@ -15,7 +15,7 @@ Run the complete daily arXiv digest pipeline step by step.
 4. Download full paper texts
 5. Deep-review selected papers (LLM)
 6. Generate markdown digest
-7. Deliver via Discord
+7. Deliver via email
 
 ## Usage
 

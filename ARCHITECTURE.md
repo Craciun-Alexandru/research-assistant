@@ -19,7 +19,7 @@ fetch → prefilter → extract_latex → scorer → download → reviewer → d
 | **download** | `scored_papers_summary.json` | `resources/papers/<id>.txt` | Downloads arXiv LaTeX source, extracts body text (pre-appendix), writes plain text |
 | **reviewer** | `scored_papers_summary.json`, paper texts | `digest_YYYY-MM-DD.json` | Deep scholarly analysis via LLM, selects final 5–6 papers |
 | **digest** | `digest_YYYY-MM-DD.json` | `resources/digests/digest_YYYY-MM-DD.md`, `digest_YYYY-MM-DD.html` | Converts review JSON to formatted Markdown and HTML |
-| **deliver** | `digest_YYYY-MM-DD.md`, `digest_YYYY-MM-DD.html` | *(Discord message and/or email)* | Delivers digest via Discord, email, or both |
+| **deliver** | `digest_YYYY-MM-DD.md`, `digest_YYYY-MM-DD.html` | *(email)* | Delivers digest via email |
 
 All intermediate JSON files live in `resources/current/` (a symlink to `resources/YYYY-MM-DD/`).
 
@@ -90,7 +90,7 @@ All pipeline logic lives in `pipeline/src/arxiv_digest/`:
 | `reviewer.py` | Per-paper deep scholarly analysis via LLM. Selects a diverse final set of 5–6 papers. |
 | `digest.py` | Converts review JSON into formatted Markdown. Also produces HTML via `digest_html.py`. |
 | `digest_html.py` | Converts review JSON into formatted HTML for email delivery. Inline CSS, paper cards, score badges. |
-| `deliver.py` | Delivery orchestrator: dispatches to Discord, email, or both based on `load_delivery_config()`. |
+| `deliver.py` | Email delivery entry point: validates HTML path and delegates to `deliver_email_digest()`. |
 | `deliver_email.py` | Email delivery via stdlib `smtplib` + `email.mime`. SMTP with STARTTLS, multipart/alternative (text + HTML). |
 | `onboard.py` | Interactive preference wizard. Uses multi-turn LLM chat to build `user_preferences.json`. Run with `python -m arxiv_digest.onboard`. |
 | `utils.py` | Shared helpers: JSON I/O (`load_json`, `save_json`), keyword extraction. |
@@ -128,7 +128,7 @@ All pipeline logic lives in `pipeline/src/arxiv_digest/`:
 │   │   ├── reviewer.py               # Deep reviewer (full-text LLM analysis)
 │   │   ├── digest.py                 # JSON → Markdown formatter (also triggers HTML)
 │   │   ├── digest_html.py            # JSON → HTML formatter (for email)
-│   │   ├── deliver.py                # Delivery orchestrator (Discord/email/both)
+│   │   ├── deliver.py                # Delivery entry point (email)
 │   │   ├── deliver_email.py          # Email delivery via smtplib
 │   │   ├── onboard.py                # Interactive preference wizard
 │   │   ├── utils.py                  # Shared helpers (JSON I/O, keywords)
