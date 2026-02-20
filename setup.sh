@@ -15,7 +15,7 @@ PIPELINE="$WORKSPACE/pipeline"
 PREFS="$WORKSPACE/user_preferences.json"
 SCRIPTS="$WORKSPACE/scripts"
 VENV_PYTHON="$PIPELINE/.venv/bin/python"
-LOG="\$HOME/cron_digest.log"
+LOG="$WORKSPACE/cron_digest.log"
 
 echo "========================================"
 echo "  arXiv Digest Pipeline — Setup"
@@ -510,11 +510,11 @@ case "$INSTALL_CRON" in
     [yY]*)
         # Build cron block
         CRON_BLOCK="# ── arXiv Digest Pipeline ──
-00 07 * * * \"$SCRIPTS/fetch_prefilter.sh\" >> $LOG 2>&1
-05 07 * * * \"$SCRIPTS/score_papers.sh\" >> $LOG 2>&1
-10 07 * * * \"$SCRIPTS/download_papers.sh\" >> $LOG 2>&1
-20 07 * * * \"$SCRIPTS/review_papers.sh\" >> $LOG 2>&1
-59 07 * * * \"$SCRIPTS/digest_deliver.sh\" >> $LOG 2>&1
+00 07 * * * \"$SCRIPTS/fetch_prefilter.sh\"
+05 07 * * * \"$SCRIPTS/score_papers.sh\"
+10 07 * * * \"$SCRIPTS/download_papers.sh\"
+20 07 * * * \"$SCRIPTS/review_papers.sh\"
+59 07 * * * \"$SCRIPTS/digest_deliver.sh\"
 # ── End arXiv Digest Pipeline ──"
 
         # Remove any existing arXiv digest entries, then append

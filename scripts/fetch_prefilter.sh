@@ -1,15 +1,11 @@
 #!/bin/sh
-# This script is designed to be run as a cron job to fetch and prefilter research papers from arXiv on a daily basis. It will execute the following steps: 
-# 1. Change to the appropriate directory where the Python scripts are located.
-# 2. Run the `fetch_papers.py` script to retrieve papers from specified categories
-# 3. Run the `prefilter_papers.py` script to filter the fetched papers down to a target count
-#
+# Fetch papers from arXiv and pre-filter by keyword/category.
 # Cron entry example (runs daily at 7:00 AM):
-# 0 7 * * * /path/to/fetch_prefilter.sh >> "$HOME/cron_digest.log" 2>&1
-# Make sure to replace "/path/to/fetch_prefilter.sh" with the actual path to this script on your system.
+# 0 7 * * * /path/to/fetch_prefilter.sh
 set -e
 WORKSPACE="$(cd "$(dirname "$0")/.." && pwd)"
 export ARXIV_DIGEST_WORKSPACE="$WORKSPACE"
+exec >> "$WORKSPACE/cron_digest.log" 2>&1
 cd "$WORKSPACE/pipeline"
 
 # Activate the project environment

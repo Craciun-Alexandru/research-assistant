@@ -63,7 +63,7 @@ When installed via `setup.sh`, the pipeline runs daily:
 | 07:20 | `review_papers.sh`     | Deep review via LLM               |
 | 07:59 | `digest_deliver.sh`    | Format Markdown/HTML + deliver via email |
 
-Logs are appended to `~/cron_digest.log`.
+Logs are appended to `cron_digest.log` in the project root.
 
 ## Configuration
 
