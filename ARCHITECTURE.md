@@ -13,11 +13,11 @@ fetch → prefilter → extract_latex → scorer → download → reviewer → d
 | Step | Reads | Writes | Does |
 |------|-------|--------|------|
 | **fetch** | `user_preferences.json` | `daily_papers.json` | Queries arXiv API for configured categories and date range |
-| **prefilter** | `daily_papers.json`, `user_preferences.json` | `filtered_papers.json` | Deterministic keyword/category/avoidance filtering (~150 → ~50 papers) |
+| **prefilter** | `daily_papers.json`, `user_preferences.json` | `filtered_papers.json` | Deterministic keyword/category/avoidance filtering |
 | **extract_latex** | `filtered_papers.json` | `filtered_papers.json` | Downloads arXiv LaTeX source, extracts keywords and introduction text to enrich papers |
-| **scorer** | `filtered_papers.json`, `user_preferences.json` | `scored_papers_summary.json` | Hybrid deterministic + LLM scoring, selects top ~25–30 |
+| **scorer** | `filtered_papers.json`, `user_preferences.json` | `scored_papers_summary.json` | Hybrid deterministic + LLM scoring, selects top 40% |
 | **download** | `scored_papers_summary.json` | `resources/papers/<id>.txt` | Downloads arXiv LaTeX source, extracts body text (pre-appendix), writes plain text |
-| **reviewer** | `scored_papers_summary.json`, paper texts | `digest_YYYY-MM-DD.json` | Deep scholarly analysis via LLM, selects final 5–6 papers |
+| **reviewer** | `scored_papers_summary.json`, paper texts | `digest_YYYY-MM-DD.json` | Deep scholarly analysis via LLM, selects final 3 papers |
 | **digest** | `digest_YYYY-MM-DD.json` | `resources/digests/digest_YYYY-MM-DD.md`, `digest_YYYY-MM-DD.html` | Converts review JSON to formatted Markdown and HTML |
 | **deliver** | `digest_YYYY-MM-DD.md`, `digest_YYYY-MM-DD.html` | *(email)* | Delivers digest via email |
 
@@ -49,11 +49,11 @@ The scorer uses a hybrid approach to minimise API costs:
 - **Avoidance penalty** (0–3): Benchmark/engineering papers without theory
 
 **LLM-based (batched, fast model):**
-- **Interest score** (0–2): Semantic alignment with user's stated research interests. Papers are sent in batches of 15–20 to minimise API calls.
+- **Interest score** (0–2): Semantic alignment with user's stated research interests
 
 **Total** = category + keyword + interest + novelty − avoidance
 
-Papers scoring ≥ 7 (top 25–30) advance to download and deep review.
+The top 40% of scored papers advance to download and deep review.
 
 ## LLM Abstraction Layer
 
@@ -85,9 +85,10 @@ All pipeline logic lives in `pipeline/src/arxiv_digest/`:
 | `fetch.py` | Queries arXiv API by category and date range. Respects rate limits and deduplicates across categories. |
 | `prefilter.py` | Deterministic keyword/category/avoidance filtering. No LLM calls. |
 | `extract_latex.py` | Downloads arXiv LaTeX source tarballs, parses metadata (keywords, introduction) to enrich papers before scoring. |
+| `prompt_utils.py` | Shared prompt helpers. `build_persona(interests, research_areas)` derives a dynamic LLM persona sentence from the user's preferences; used by scorer and reviewer. |
 | `scorer.py` | Hybrid scoring: deterministic component + LLM interest-alignment scoring in batches. |
 | `download.py` | LaTeX source download and body text extraction. Strips preamble and appendices before writing plain text. Maintains `download_metadata.json` cache. |
-| `reviewer.py` | Per-paper deep scholarly analysis via LLM. Selects a diverse final set of 5–6 papers. |
+| `reviewer.py` | Per-paper deep scholarly analysis via LLM. Selects a diverse final set of papers. |
 | `digest.py` | Converts review JSON into Markdown and HTML. `generate_markdown()` produces the plain-text digest; `generate_html()` produces the styled email body. |
 | `deliver.py` | Email delivery via stdlib `smtplib` + `email.mime`. Builds a multipart/alternative message (Markdown + HTML) and sends via SMTP with STARTTLS. |
 | `onboard.py` | Interactive preference wizard. Uses multi-turn LLM chat to build `user_preferences.json`. Run with `python -m arxiv_digest.onboard`. |
@@ -100,6 +101,8 @@ All pipeline logic lives in `pipeline/src/arxiv_digest/`:
 **LaTeX source extraction.** `download.py` fetches the same e-print source archive used by `extract_latex.py` and extracts the document body from the LaTeX source. The preamble (`\usepackage`, `\newcommand`, etc.) is discarded; everything after the first appendix boundary (`\appendix`, `\begin{appendix}`, `\section{Appendix}`, `\bibliography{...}`, or `\end{document}`) is truncated to reduce reviewer token usage. Papers with no LaTeX source (PDF-only submissions) produce no `.txt` file and are silently skipped by `reviewer.py`.
 
 **Hybrid scoring.** Deterministic heuristics handle cheap bulk filtering (category match, keyword hits, avoidance penalties). The LLM is only called for semantic interest alignment on the already-filtered set — this minimises API costs while preserving personalisation quality.
+
+**Dynamic LLM persona.** Every LLM prompt opens with a persona sentence derived from `user_preferences.json` at runtime (`prompt_utils.build_persona`). Category codes are sorted by weight and joined with the free-text interests list, so the model understands the researcher's domain without any hardcoded field names in the source code.
 
 **Timestamped daily directories with `current/` symlink.** Each day's outputs go to `resources/YYYY-MM-DD/`. The `current` symlink provides a stable path for scripts and config constants. The dated directories enable traceability and performance analysis of the recommendation system over time.
 
@@ -118,9 +121,10 @@ All pipeline logic lives in `pipeline/src/arxiv_digest/`:
 │   │   ├── __init__.py
 │   │   ├── __main__.py               # Entry point: python -m arxiv_digest
 │   │   ├── config.py                 # Paths, constants, load_llm_config()
+│   │   ├── prompt_utils.py           # Shared prompt helpers (build_persona)
 │   │   ├── fetch.py                  # arXiv API fetch
 │   │   ├── prefilter.py              # Keyword/category pre-filter
-│   │   ├── extract_latex.py           # LaTeX source metadata extractor
+│   │   ├── extract_latex.py          # LaTeX source metadata extractor
 │   │   ├── scorer.py                 # Hybrid scorer (deterministic + LLM)
 │   │   ├── download.py               # LaTeX source downloader + body text extraction
 │   │   ├── reviewer.py               # Deep reviewer (full-text LLM analysis)
@@ -142,8 +146,9 @@ All pipeline logic lives in `pipeline/src/arxiv_digest/`:
 │       ├── test_prefilter.py
 │       ├── test_extract_latex.py
 │       └── test_scorer.py
-├── scripts/                          # Thin shell wrappers for cron
-│   ├── fetch_prefilter.sh
+├── scripts/
+│   ├── run_pipeline.sh               # Main cron entry point (calls python -m arxiv_digest)
+│   ├── fetch_prefilter.sh            # Per-stage scripts for manual debugging
 │   ├── score_papers.sh
 │   ├── download_papers.sh
 │   ├── review_papers.sh
@@ -152,6 +157,6 @@ All pipeline logic lives in `pipeline/src/arxiv_digest/`:
 │   ├── current -> YYYY-MM-DD/        # Symlink to today's run
 │   ├── YYYY-MM-DD/                   # Per-day pipeline outputs (JSON intermediates)
 │   ├── papers/                       # Downloaded full-text files + metadata cache
-│   └── digests/                      # Final Markdown digests
+│   └── digests/                      # Final Markdown + HTML digests
 └── user_preferences.json             # Research profile + LLM config (gitignored)
 ```
