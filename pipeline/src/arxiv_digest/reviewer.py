@@ -23,6 +23,7 @@ from arxiv_digest.config import (
 )
 from arxiv_digest.llm import LLMError, create_client
 from arxiv_digest.llm.base import LLMClient
+from arxiv_digest.prompt_utils import build_persona
 
 # ── Schemas ──────────────────────────────────────────────────────────
 
@@ -64,7 +65,9 @@ _SELECTION_SCHEMA = {
 _MAX_TEXT_LEN = 40_000
 
 
-def _build_batch_analysis_prompt(batch: list[tuple[dict, str]], interests: list[str]) -> str:
+def _build_batch_analysis_prompt(
+    batch: list[tuple[dict, str]], interests: list[str], research_areas: dict
+) -> str:
     """Build the deep-review prompt for a batch of papers."""
     interests_text = "\n".join(f"- {i}" for i in interests)
 
@@ -82,7 +85,7 @@ def _build_batch_analysis_prompt(batch: list[tuple[dict, str]], interests: list[
         )
 
     return (
-        "You are a scholarly research paper reviewer.\n\n"
+        f"{build_persona(interests, research_areas)}\n\n"
         "User's research interests:\n"
         f"{interests_text}\n\n"
         f"Analyze each of the following {len(batch)} papers:\n"
@@ -106,6 +109,7 @@ def analyze_batch(
     llm_client: LLMClient,
     *,
     model: str | None = None,
+    research_areas: dict | None = None,
 ) -> list[dict]:
     """Run deep analysis on a batch of papers in a single LLM call.
 
@@ -114,12 +118,13 @@ def analyze_batch(
         interests: User research interests.
         llm_client: LLM backend.
         model: Model name override.
+        research_areas: User's research area weights from preferences.
 
     Returns:
         List of analysis dicts, each with arxiv_id, summary, relevance,
         key_insight, score.
     """
-    prompt = _build_batch_analysis_prompt(batch, interests)
+    prompt = _build_batch_analysis_prompt(batch, interests, research_areas or {})
     resp = llm_client.complete_json(prompt, _ANALYSIS_SCHEMA, model=model)
     return resp.get("analyses", [])
 
@@ -131,6 +136,7 @@ def _build_selection_prompt(
     analyses: list[dict],
     interests: list[str],
     target_count: int,
+    research_areas: dict | None = None,
 ) -> str:
     """Build the final selection prompt."""
     interests_text = "\n".join(f"- {i}" for i in interests)
@@ -145,7 +151,7 @@ def _build_selection_prompt(
         )
 
     return (
-        "You are curating a daily research digest.\n\n"
+        f"{build_persona(interests, research_areas or {})}\n\n"
         "User's research interests:\n"
         f"{interests_text}\n\n"
         f"The following papers have been deeply analyzed:\n{papers_text}\n\n"
@@ -167,13 +173,14 @@ def select_papers(
     *,
     model: str | None = None,
     target_count: int = 3,
+    research_areas: dict | None = None,
 ) -> tuple[list[str], str]:
     """Ask the LLM to pick the final diverse set of papers.
 
     Returns:
         Tuple of (selected arxiv_ids, digest summary string).
     """
-    prompt = _build_selection_prompt(analyses, interests, target_count)
+    prompt = _build_selection_prompt(analyses, interests, target_count, research_areas)
     resp = llm_client.complete_json(prompt, _SELECTION_SCHEMA, model=model)
     return resp.get("selected_ids", []), resp.get("digest_summary", "")
 
@@ -207,6 +214,7 @@ def review_papers(
     """
     papers = scored.get("scored_papers_summary", [])
     interests = preferences.get("interests", [])
+    research_areas = preferences.get("research_areas", {})
 
     # Load full texts, skip papers with no downloaded text
     available: list[tuple[dict, str]] = []
@@ -232,7 +240,9 @@ def review_papers(
         print(f"  Batch {batch_num}/{total_batches}: {ids}")
 
         try:
-            results = analyze_batch(batch, interests, llm_client, model=model)
+            results = analyze_batch(
+                batch, interests, llm_client, model=model, research_areas=research_areas
+            )
         except LLMError as exc:
             print(f"    Warning: batch analysis failed: {exc}")
             continue
@@ -268,7 +278,12 @@ def review_papers(
     # 2. Select final papers
     print(f"\nSelecting top {target_selected} papers from {len(analyses)} analyses...")
     selected_ids, digest_summary = select_papers(
-        analyses, interests, llm_client, model=model, target_count=target_selected
+        analyses,
+        interests,
+        llm_client,
+        model=model,
+        target_count=target_selected,
+        research_areas=research_areas,
     )
 
     # Build final paper list

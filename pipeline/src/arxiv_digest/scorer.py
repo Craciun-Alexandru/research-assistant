@@ -133,7 +133,7 @@ _INTEREST_SCHEMA = {
 }
 
 
-def _build_interest_prompt(batch: list[dict], interests: list[str]) -> str:
+def _build_interest_prompt(batch: list[dict], interests: list[str], research_areas: dict) -> str:
     """Build the prompt for batched interest scoring."""
     interests_text = "\n".join(f"- {i}" for i in interests)
 
@@ -147,7 +147,7 @@ def _build_interest_prompt(batch: list[dict], interests: list[str]) -> str:
             papers_text += f"Keywords: {', '.join(p['keywords'])}\n"
 
     return (
-        "You are an academic paper relevance scorer.\n\n"
+        f"{build_persona(interests, research_areas)}\n\n"
         "User research interests:\n"
         f"{interests_text}\n\n"
         "Papers to score:\n"
@@ -164,6 +164,7 @@ def calculate_interest_scores(
     llm_client: LLMClient,
     *,
     model: str | None = None,
+    research_areas: dict | None = None,
 ) -> dict[str, int]:
     """Score papers for interest alignment via a single LLM call.
 
@@ -173,7 +174,7 @@ def calculate_interest_scores(
     result: dict[str, int] = {}
 
     print(f"  Interest scoring {len(papers)} papers in one call...")
-    prompt = _build_interest_prompt(papers, interests)
+    prompt = _build_interest_prompt(papers, interests, research_areas or {})
     try:
         resp = llm_client.complete_json(prompt, _INTEREST_SCHEMA, model=model)
         for item in resp.get("scores", []):
@@ -228,7 +229,9 @@ def score_papers(
 
     # 2. LLM interest scores
     print("Computing interest scores via LLM...")
-    interest_scores = calculate_interest_scores(papers, interests, llm_client, model=model)
+    interest_scores = calculate_interest_scores(
+        papers, interests, llm_client, model=model, research_areas=user_areas
+    )
 
     # 3. Combine and rank
     scored: list[dict] = []
