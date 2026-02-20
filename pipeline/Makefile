@@ -1,4 +1,4 @@
-.PHONY: install lint format test pipeline fetch prefilter scorer download reviewer digest deliver setup-cron clean
+.PHONY: install lint format test pipeline feedback fetch prefilter scorer download reviewer digest deliver setup-cron clean
 
 # ── Setup ──
 
@@ -40,6 +40,9 @@ digest:
 
 deliver:
 	python -m arxiv_digest.deliver
+
+feedback:
+	python -m arxiv_digest.feedback
 
 pipeline:
 	python -m arxiv_digest
