@@ -7,7 +7,7 @@ For internal design details, see [ARCHITECTURE.md](../ARCHITECTURE.md).
 ## Stack
 
 - Python 3.10+, no frameworks
-- Dependencies: requests, beautifulsoup4, PyMuPDF (fitz), google-genai, anthropic
+- Dependencies: requests, google-genai, anthropic
 - Linting/formatting: ruff
 - Package: `src/arxiv_digest/` (PEP 621, pyproject.toml)
 - Install for dev: `pip install -e ".[dev]" --break-system-packages`
@@ -49,7 +49,7 @@ resources/            # Data directory (papers, digests, JSON intermediates)
 fetch_papers (arXiv API) → prefilter (keyword/category match)
   → extract_latex (LaTeX metadata)
   → scorer (LLM — configurable: Gemini Flash or Claude Haiku)
-  → download (HTML→TXT, PDF→TXT fallback)
+  → download (LaTeX source → body TXT, appendices stripped)
   → reviewer (LLM — configurable: Gemini Pro or Claude Sonnet)
   → digest (JSON→Markdown+HTML) → deliver (Discord and/or email)
 

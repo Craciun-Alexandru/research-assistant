@@ -16,7 +16,7 @@ fetch → prefilter → extract_latex → scorer → download → reviewer → d
 | **prefilter** | `daily_papers.json`, `user_preferences.json` | `filtered_papers.json` | Deterministic keyword/category/avoidance filtering (~150 → ~50 papers) |
 | **extract_latex** | `filtered_papers.json` | `filtered_papers.json` | Downloads arXiv LaTeX source, extracts keywords and introduction text to enrich papers |
 | **scorer** | `filtered_papers.json`, `user_preferences.json` | `scored_papers_summary.json` | Hybrid deterministic + LLM scoring, selects top ~25–30 |
-| **download** | `scored_papers_summary.json` | `resources/papers/<id>.txt` | Fetches full text (HTML preferred, PDF fallback) and extracts to plain text |
+| **download** | `scored_papers_summary.json` | `resources/papers/<id>.txt` | Downloads arXiv LaTeX source, extracts body text (pre-appendix), writes plain text |
 | **reviewer** | `scored_papers_summary.json`, paper texts | `digest_YYYY-MM-DD.json` | Deep scholarly analysis via LLM, selects final 5–6 papers |
 | **digest** | `digest_YYYY-MM-DD.json` | `resources/digests/digest_YYYY-MM-DD.md`, `digest_YYYY-MM-DD.html` | Converts review JSON to formatted Markdown and HTML |
 | **deliver** | `digest_YYYY-MM-DD.md`, `digest_YYYY-MM-DD.html` | *(Discord message and/or email)* | Delivers digest via Discord, email, or both |
@@ -86,7 +86,7 @@ All pipeline logic lives in `pipeline/src/arxiv_digest/`:
 | `prefilter.py` | Deterministic keyword/category/avoidance filtering. No LLM calls. |
 | `extract_latex.py` | Downloads arXiv LaTeX source tarballs, parses metadata (keywords, introduction) to enrich papers before scoring. |
 | `scorer.py` | Hybrid scoring: deterministic component + LLM interest-alignment scoring in batches. |
-| `download.py` | HTML-first full-text retrieval (ar5iv) with PDF fallback (PyMuPDF). Extracts to plain text. Maintains `download_metadata.json` cache. |
+| `download.py` | LaTeX source download and body text extraction. Strips preamble and appendices before writing plain text. Maintains `download_metadata.json` cache. |
 | `reviewer.py` | Per-paper deep scholarly analysis via LLM. Selects a diverse final set of 5–6 papers. |
 | `digest.py` | Converts review JSON into formatted Markdown. Also produces HTML via `digest_html.py`. |
 | `digest_html.py` | Converts review JSON into formatted HTML for email delivery. Inline CSS, paper cards, score badges. |
@@ -99,7 +99,7 @@ All pipeline logic lives in `pipeline/src/arxiv_digest/`:
 
 ## Design Decisions
 
-**HTML-first download.** arXiv papers published after Dec 2023 have HTML versions (via ar5iv). HTML yields cleaner text extraction than PDF (no column-merging artefacts, intact math notation). PDF fallback handles older papers.
+**LaTeX source extraction.** `download.py` fetches the same e-print source archive used by `extract_latex.py` and extracts the document body from the LaTeX source. The preamble (`\usepackage`, `\newcommand`, etc.) is discarded; everything after the first appendix boundary (`\appendix`, `\begin{appendix}`, `\section{Appendix}`, `\bibliography{...}`, or `\end{document}`) is truncated to reduce reviewer token usage. Papers with no LaTeX source (PDF-only submissions) produce no `.txt` file and are silently skipped by `reviewer.py`.
 
 **Hybrid scoring.** Deterministic heuristics handle cheap bulk filtering (category match, keyword hits, avoidance penalties). The LLM is only called for semantic interest alignment on the already-filtered set — this minimises API costs while preserving personalisation quality.
 
@@ -124,7 +124,7 @@ All pipeline logic lives in `pipeline/src/arxiv_digest/`:
 │   │   ├── prefilter.py              # Keyword/category pre-filter
 │   │   ├── extract_latex.py           # LaTeX source metadata extractor
 │   │   ├── scorer.py                 # Hybrid scorer (deterministic + LLM)
-│   │   ├── download.py               # HTML/PDF downloader + text extraction
+│   │   ├── download.py               # LaTeX source downloader + body text extraction
 │   │   ├── reviewer.py               # Deep reviewer (full-text LLM analysis)
 │   │   ├── digest.py                 # JSON → Markdown formatter (also triggers HTML)
 │   │   ├── digest_html.py            # JSON → HTML formatter (for email)
