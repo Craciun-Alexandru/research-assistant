@@ -93,6 +93,9 @@ def find_digest_dates(resources_dir: Path) -> list[str]:
     return dates
 
 
+get_available_digest_dates = find_digest_dates
+
+
 def load_digest_for_date(date_str: str, resources_dir: Path) -> dict:
     """Load and return the digest JSON for the given date string.
 
@@ -201,6 +204,9 @@ def apply_delta(prefs: dict, delta: dict) -> dict:
     return updated
 
 
+apply_preference_delta = apply_delta
+
+
 # ── LLM prompt ───────────────────────────────────────────────────────────────
 
 
@@ -260,6 +266,19 @@ Guidelines:
 
 Respond with a JSON object matching the delta schema. Omit any field where no change is needed.
 """
+
+
+def build_feedback_prompt(current_prefs: dict, feedback_entries: list[dict]) -> tuple[str, dict]:
+    """Build the LLM prompt and return it with the delta schema.
+
+    Args:
+        current_prefs: Current user preferences dict.
+        feedback_entries: List of feedback entry dicts.
+
+    Returns:
+        Tuple of (prompt_string, delta_schema_dict).
+    """
+    return (_build_llm_prompt(current_prefs, feedback_entries), _DELTA_SCHEMA)
 
 
 # ── Reviewed-history helpers ──────────────────────────────────────────────────

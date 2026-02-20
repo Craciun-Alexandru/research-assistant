@@ -6,8 +6,11 @@ import pytest
 
 from arxiv_digest.feedback import (
     apply_delta,
+    apply_preference_delta,
     build_feedback_entry,
+    build_feedback_prompt,
     find_digest_dates,
+    get_available_digest_dates,
     get_reviewed_info,
     load_digest_for_date,
 )
@@ -303,3 +306,24 @@ def test_get_reviewed_info_missing_keys_ignored():
     reviewed_dates, reviewed_ids = get_reviewed_info(history)
     assert reviewed_dates == {"2026-02-18"}
     assert reviewed_ids == {"2602.00001"}
+
+
+# ── build_feedback_prompt ────────────────────────────────────────────────────
+
+
+def test_build_feedback_prompt_returns_tuple(base_prefs):
+    entries = [{"arxiv_id": "1234", "feedback_type": "good", "feedback_text": ""}]
+    result = build_feedback_prompt(base_prefs, entries)
+    assert isinstance(result, tuple)
+    assert len(result) == 2
+    assert isinstance(result[0], str)
+    assert isinstance(result[1], dict)
+    assert "reasoning" in result[1].get("required", [])
+
+
+# ── Public aliases ───────────────────────────────────────────────────────────
+
+
+def test_aliases():
+    assert apply_preference_delta is apply_delta
+    assert get_available_digest_dates is find_digest_dates

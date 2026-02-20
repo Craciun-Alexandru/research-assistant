@@ -14,7 +14,7 @@ import sys
 from datetime import datetime, timezone
 
 from arxiv_digest.config import USER_PREFERENCES_PATH, load_llm_config
-from arxiv_digest.llm import LLMError, create_client
+from arxiv_digest.llm import ChatSession, LLMError, create_client
 
 _SYSTEM_PROMPT = """\
 You are a friendly, conversational research preference interviewer helping \
@@ -94,6 +94,8 @@ on its own line at the very end of your response.
 Do NOT say DONE until the user has confirmed the summary.
 """
 
+ONBOARD_SYSTEM_PROMPT = _SYSTEM_PROMPT
+
 _EXTRACTION_PROMPT = """\
 Based on the conversation above, extract the user's research preferences \
 as a JSON object with exactly this structure:
@@ -133,6 +135,50 @@ def _save_prefs(prefs: dict) -> None:
     with USER_PREFERENCES_PATH.open("w") as f:
         json.dump(prefs, f, indent=2)
     print(f"\nPreferences saved to {USER_PREFERENCES_PATH}")
+
+
+def extract_preferences_from_chat(chat: ChatSession) -> dict:
+    """Send the extraction prompt and parse the JSON response.
+
+    Args:
+        chat: An active ChatSession with completed onboarding conversation.
+
+    Returns:
+        Dict with research_areas, interests, and avoid keys.
+
+    Raises:
+        json.JSONDecodeError: If the response is not valid JSON.
+        LLMError: If the LLM call fails.
+    """
+    extraction_response = chat.send(_EXTRACTION_PROMPT)
+    text = extraction_response.strip()
+    if text.startswith("```"):
+        lines = text.split("\n")
+        text = "\n".join(lines[1:-1])
+    return json.loads(text)
+
+
+def merge_research_preferences(existing: dict, new_research: dict) -> dict:
+    """Merge extracted research preferences into an existing preferences dict.
+
+    Replaces research_areas/interests/avoid from new_research while preserving
+    llm config, delivery settings, feedback_history, and update_count.
+
+    Args:
+        existing: Current full preferences dict.
+        new_research: Dict with research_areas, interests, and avoid keys.
+
+    Returns:
+        Merged preferences dict (does not mutate input).
+    """
+    merged = dict(existing)
+    merged["research_areas"] = new_research.get("research_areas", {})
+    merged["interests"] = new_research.get("interests", [])
+    merged["avoid"] = new_research.get("avoid", [])
+    merged["feedback_history"] = existing.get("feedback_history", [])
+    merged["last_updated"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
+    merged["update_count"] = existing.get("update_count", 0)
+    return merged
 
 
 def main() -> None:
@@ -207,28 +253,14 @@ def main() -> None:
     # Extract structured preferences from the conversation
     print("Extracting your preferences...")
     try:
-        extraction_response = chat.send(_EXTRACTION_PROMPT)
-        # Strip markdown code fences if present
-        text = extraction_response.strip()
-        if text.startswith("```"):
-            # Remove first line (```json or ```) and last line (```)
-            lines = text.split("\n")
-            text = "\n".join(lines[1:-1])
-        research_prefs = json.loads(text)
+        research_prefs = extract_preferences_from_chat(chat)
     except (json.JSONDecodeError, LLMError) as exc:
         print(f"Error extracting preferences: {exc}")
         print("Your conversation was completed but preferences could not be saved automatically.")
         print("You can re-run this wizard with: python -m arxiv_digest.onboard")
         sys.exit(1)
 
-    # Merge with existing prefs: keep llm config, replace research data
-    merged = dict(existing_prefs)
-    merged["research_areas"] = research_prefs.get("research_areas", {})
-    merged["interests"] = research_prefs.get("interests", [])
-    merged["avoid"] = research_prefs.get("avoid", [])
-    merged["feedback_history"] = existing_prefs.get("feedback_history", [])
-    merged["last_updated"] = datetime.now(timezone.utc).isoformat()  # noqa: UP017
-    merged["update_count"] = existing_prefs.get("update_count", 0)
+    merged = merge_research_preferences(existing_prefs, research_prefs)
 
     _save_prefs(merged)
 
