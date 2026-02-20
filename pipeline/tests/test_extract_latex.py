@@ -206,10 +206,10 @@ def test_extract_introduction_not_found():
     assert LaTeXParser.extract_introduction(doc) == ""
 
 
-def test_extract_introduction_truncation():
+def test_extract_introduction_no_truncation():
     long_intro = r"\section{Introduction}" + "word " * 1000 + r"\section{Methods}"
     intro = LaTeXParser.extract_introduction(long_intro)
-    assert len(intro) <= 2000
+    assert len(intro) > 2000
 
 
 # ── LaTeXParser: utility methods ─────────────────────────────────────

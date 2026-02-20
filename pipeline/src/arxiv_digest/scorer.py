@@ -50,9 +50,8 @@ def calculate_keyword_score(paper: dict, all_keywords: set[str]) -> float:
     """
     title_lower = paper.get("title", "").lower()
     abstract_lower = paper.get("abstract", "").lower()
-    latex_meta = paper.get("latex_metadata", {})
-    latex_keywords_lower = " ".join(latex_meta.get("keywords", [])).lower()
-    latex_intro_lower = latex_meta.get("introduction", "").lower()
+    latex_keywords_lower = " ".join(paper.get("keywords", [])).lower()
+    latex_intro_lower = paper.get("introduction", "").lower()
 
     score = 0.0
     for kw in all_keywords:
@@ -143,9 +142,8 @@ def _build_interest_prompt(batch: list[dict], interests: list[str]) -> str:
         papers_text += (
             f"\n---\narxiv_id: {p['arxiv_id']}\nTitle: {p['title']}\nAbstract: {abstract_snippet}\n"
         )
-        latex_meta = p.get("latex_metadata", {})
-        if latex_meta.get("keywords"):
-            papers_text += f"Keywords: {', '.join(latex_meta['keywords'])}\n"
+        if p.get("keywords"):
+            papers_text += f"Keywords: {', '.join(p['keywords'])}\n"
 
     return (
         "You are an academic paper relevance scorer.\n\n"
@@ -165,33 +163,26 @@ def calculate_interest_scores(
     llm_client: LLMClient,
     *,
     model: str | None = None,
-    batch_size: int = 15,
 ) -> dict[str, int]:
-    """Score papers for interest alignment via batched LLM calls.
+    """Score papers for interest alignment via a single LLM call.
 
     Returns:
         Mapping of arxiv_id -> interest score (0, 1, or 2).
     """
     result: dict[str, int] = {}
 
-    for i in range(0, len(papers), batch_size):
-        batch = papers[i : i + batch_size]
-        batch_num = i // batch_size + 1
-        total_batches = (len(papers) + batch_size - 1) // batch_size
-        print(f"  Interest scoring batch {batch_num}/{total_batches} ({len(batch)} papers)...")
-
-        prompt = _build_interest_prompt(batch, interests)
-        try:
-            resp = llm_client.complete_json(prompt, _INTEREST_SCHEMA, model=model)
-            for item in resp.get("scores", []):
-                aid = item.get("arxiv_id", "")
-                score = max(0, min(2, item.get("score", 0)))
-                result[aid] = score
-        except LLMError as exc:
-            print(f"  Warning: LLM call failed for batch {batch_num}: {exc}")
-            # Default to 0 for papers in this batch
-            for p in batch:
-                result.setdefault(p["arxiv_id"], 0)
+    print(f"  Interest scoring {len(papers)} papers in one call...")
+    prompt = _build_interest_prompt(papers, interests)
+    try:
+        resp = llm_client.complete_json(prompt, _INTEREST_SCHEMA, model=model)
+        for item in resp.get("scores", []):
+            aid = item.get("arxiv_id", "")
+            score = max(0, min(2, item.get("score", 0)))
+            result[aid] = score
+    except LLMError as exc:
+        print(f"  Warning: LLM call failed: {exc}")
+        for p in papers:
+            result.setdefault(p["arxiv_id"], 0)
 
     return result
 
@@ -205,8 +196,7 @@ def score_papers(
     llm_client: LLMClient,
     *,
     model: str | None = None,
-    min_score: float = 7.0,
-    max_selected: int = 30,
+    select_fraction: float = 0.4,
 ) -> dict:
     """Score all papers and return the top candidates.
 
@@ -262,15 +252,13 @@ def score_papers(
 
     scored.sort(key=lambda x: x["score"], reverse=True)
 
-    # 4. Select top papers
-    selected = [p for p in scored if p["score"] >= min_score][:max_selected]
-    # If too few, relax threshold
-    if len(selected) < 20:
-        selected = scored[:max_selected]
+    # 4. Select top 40% by score
+    n = max(1, round(len(scored) * select_fraction))
+    selected = scored[:n]
 
     print(
-        f"\nSelected {len(selected)}/{len(papers)} papers (min score in selection: "
-        f"{selected[-1]['score'] if selected else 'N/A'})"
+        f"\nSelected {len(selected)}/{len(papers)} papers "
+        f"({select_fraction:.0%}, min score: {selected[-1]['score'] if selected else 'N/A'})"
     )
 
     return {
@@ -304,16 +292,10 @@ def _brief_reason(det: dict[str, float], interest: int) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Quick-score filtered papers")
     parser.add_argument(
-        "--min-score",
+        "--select-fraction",
         type=float,
-        default=7.0,
-        help="Minimum score for selection (default: 7.0)",
-    )
-    parser.add_argument(
-        "--max-selected",
-        type=int,
-        default=30,
-        help="Maximum papers to select (default: 30)",
+        default=0.4,
+        help="Fraction of papers to select (default: 0.4)",
     )
     args = parser.parse_args()
 
@@ -336,8 +318,7 @@ def main() -> None:
         preferences,
         client,
         model=llm_cfg["scorer_model"],
-        min_score=args.min_score,
-        max_selected=args.max_selected,
+        select_fraction=args.select_fraction,
     )
 
     # Write output

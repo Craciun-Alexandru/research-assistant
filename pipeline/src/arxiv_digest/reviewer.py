@@ -30,12 +30,22 @@ from arxiv_digest.llm.base import LLMClient
 _ANALYSIS_SCHEMA = {
     "type": "object",
     "properties": {
-        "summary": {"type": "string"},
-        "relevance": {"type": "string"},
-        "key_insight": {"type": "string"},
-        "score": {"type": "number"},
+        "analyses": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "arxiv_id": {"type": "string"},
+                    "summary": {"type": "string"},
+                    "relevance": {"type": "string"},
+                    "key_insight": {"type": "string"},
+                    "score": {"type": "number"},
+                },
+                "required": ["arxiv_id", "summary", "relevance", "key_insight", "score"],
+            },
+        },
     },
-    "required": ["summary", "relevance", "key_insight", "score"],
+    "required": ["analyses"],
 }
 
 _SELECTION_SCHEMA = {
@@ -50,51 +60,69 @@ _SELECTION_SCHEMA = {
     "required": ["selected_ids", "digest_summary"],
 }
 
-# ── Per-paper analysis ───────────────────────────────────────────────
+# ── Per-batch analysis ───────────────────────────────────────────────
+
+_MAX_TEXT_LEN = 40_000
 
 
-def _build_analysis_prompt(paper: dict, full_text: str, interests: list[str]) -> str:
-    """Build the deep-review prompt for a single paper."""
+def _build_batch_analysis_prompt(batch: list[tuple[dict, str]], interests: list[str]) -> str:
+    """Build the deep-review prompt for a batch of papers."""
     interests_text = "\n".join(f"- {i}" for i in interests)
-    # Truncate very long papers to stay within context limits
-    max_text_len = 80_000
-    if len(full_text) > max_text_len:
-        full_text = full_text[:max_text_len] + "\n\n[Text truncated for length]"
+
+    papers_text = ""
+    for paper, full_text in batch:
+        if len(full_text) > _MAX_TEXT_LEN:
+            full_text = full_text[:_MAX_TEXT_LEN] + "\n\n[Text truncated for length]"
+        papers_text += (
+            f"\n{'=' * 60}\n"
+            f"arxiv_id: {paper['arxiv_id']}\n"
+            f"Title: {paper['title']}\n"
+            f"Authors: {', '.join(paper.get('authors', []))}\n"
+            f"Categories: {', '.join(paper.get('categories', []))}\n\n"
+            f"Full text:\n{full_text}\n"
+        )
 
     return (
         "You are a scholarly research paper reviewer.\n\n"
-        f"Paper: {paper['title']}\n"
-        f"Authors: {', '.join(paper.get('authors', []))}\n"
-        f"Categories: {', '.join(paper.get('categories', []))}\n\n"
-        f"Full text:\n{full_text}\n\n"
         "User's research interests:\n"
         f"{interests_text}\n\n"
-        "Provide a deep analysis of this paper:\n"
-        "1. **summary**: 2-3 paragraphs covering the problem addressed, "
+        f"Analyze each of the following {len(batch)} papers:\n"
+        f"{papers_text}\n\n"
+        "For each paper provide:\n"
+        "1. **arxiv_id**: the paper's arxiv_id (as given above)\n"
+        "2. **summary**: 2-3 paragraphs covering the problem addressed, "
         "methodology/approach, and key results/contributions.\n"
-        "2. **relevance**: 1 paragraph explaining how this connects to the "
+        "3. **relevance**: 1 paragraph explaining how this connects to the "
         "user's research interests and why they should read it now.\n"
-        "3. **key_insight**: 2-3 sentences on the most important takeaway "
+        "4. **key_insight**: 2-3 sentences on the most important takeaway "
         "and what makes this paper stand out.\n"
-        "4. **score**: A float from 0-10 rating overall quality and relevance.\n"
+        "5. **score**: A float from 0-10 rating overall quality and relevance.\n"
+        "Return an 'analyses' array with one object per paper.\n"
     )
 
 
-def analyze_paper(
-    paper: dict,
-    full_text: str,
+def analyze_batch(
+    batch: list[tuple[dict, str]],
     interests: list[str],
     llm_client: LLMClient,
     *,
     model: str | None = None,
-) -> dict:
-    """Run deep analysis on a single paper.
+) -> list[dict]:
+    """Run deep analysis on a batch of papers in a single LLM call.
+
+    Args:
+        batch: List of (paper dict, full_text) pairs.
+        interests: User research interests.
+        llm_client: LLM backend.
+        model: Model name override.
 
     Returns:
-        Dict with summary, relevance, key_insight, score.
+        List of analysis dicts, each with arxiv_id, summary, relevance,
+        key_insight, score.
     """
-    prompt = _build_analysis_prompt(paper, full_text, interests)
-    return llm_client.complete_json(prompt, _ANALYSIS_SCHEMA, model=model)
+    prompt = _build_batch_analysis_prompt(batch, interests)
+    resp = llm_client.complete_json(prompt, _ANALYSIS_SCHEMA, model=model)
+    return resp.get("analyses", [])
 
 
 # ── Selection ────────────────────────────────────────────────────────
@@ -162,6 +190,7 @@ def review_papers(
     model: str | None = None,
     delay: int = 60,
     target_selected: int = 6,
+    batch_size: int = 5,
 ) -> dict:
     """Deep-review scored papers and produce the digest JSON.
 
@@ -170,8 +199,9 @@ def review_papers(
         preferences: Parsed ``user_preferences.json``.
         llm_client: LLM backend.
         model: Model name override.
-        delay: Seconds to wait between per-paper LLM calls.
+        delay: Seconds to wait between batch LLM calls.
         target_selected: Number of papers to select for the final digest.
+        batch_size: Papers per LLM call (default: 5).
 
     Returns:
         Dict in the ``digest_YYYY-MM-DD.json`` format.
@@ -179,44 +209,57 @@ def review_papers(
     papers = scored.get("scored_papers_summary", [])
     interests = preferences.get("interests", [])
 
-    print(f"Deep-reviewing {len(papers)} papers...")
-    print(f"  Delay between papers: {delay}s")
-    print()
-
-    # 1. Analyze each paper sequentially
-    analyses: list[dict] = []
-    for idx, paper in enumerate(papers):
+    # Load full texts, skip papers with no downloaded text
+    available: list[tuple[dict, str]] = []
+    for paper in papers:
         aid = paper["arxiv_id"]
         txt_path = PAPERS_DIR / f"{aid}.txt"
-
         if not txt_path.exists():
-            print(f"  [{idx + 1}/{len(papers)}] Skipping {aid} (no full text)")
+            print(f"  Skipping {aid} (no full text)")
             continue
+        available.append((paper, txt_path.read_text(encoding="utf-8", errors="replace")))
 
-        print(f"  [{idx + 1}/{len(papers)}] Analyzing {aid}: {paper['title'][:60]}...")
-        full_text = txt_path.read_text(encoding="utf-8", errors="replace")
+    total_batches = (len(available) + batch_size - 1) // batch_size
+    print(f"Deep-reviewing {len(available)} papers in {total_batches} batches of {batch_size}...")
+    print(f"  Delay between batches: {delay}s")
+    print()
+
+    # 1. Analyze in batches
+    analyses: list[dict] = []
+    for batch_idx in range(0, len(available), batch_size):
+        batch = available[batch_idx : batch_idx + batch_size]
+        batch_num = batch_idx // batch_size + 1
+        ids = ", ".join(p["arxiv_id"] for p, _ in batch)
+        print(f"  Batch {batch_num}/{total_batches}: {ids}")
 
         try:
-            analysis = analyze_paper(paper, full_text, interests, llm_client, model=model)
+            results = analyze_batch(batch, interests, llm_client, model=model)
         except LLMError as exc:
-            print(f"    Warning: analysis failed: {exc}")
+            print(f"    Warning: batch analysis failed: {exc}")
             continue
 
-        analyses.append(
-            {
-                "arxiv_id": aid,
-                "title": paper["title"],
-                "authors": paper.get("authors", []),
-                "categories": paper.get("categories", []),
-                "abstract": paper.get("abstract", ""),
-                "pdf_url": paper.get("pdf_url", ""),
-                "analysis": analysis,
-            }
-        )
+        # Index results by arxiv_id to join back paper metadata
+        result_by_id = {r["arxiv_id"]: r for r in results}
+        for paper, _ in batch:
+            aid = paper["arxiv_id"]
+            analysis = result_by_id.get(aid)
+            if analysis is None:
+                print(f"    Warning: no analysis returned for {aid}")
+                continue
+            analyses.append(
+                {
+                    "arxiv_id": aid,
+                    "title": paper["title"],
+                    "authors": paper.get("authors", []),
+                    "categories": paper.get("categories", []),
+                    "abstract": paper.get("abstract", ""),
+                    "pdf_url": paper.get("pdf_url", ""),
+                    "analysis": analysis,
+                }
+            )
 
-        # Wait between papers (skip delay after the last one)
-        if idx < len(papers) - 1 and delay > 0:
-            print(f"    Waiting {delay}s before next paper...")
+        if batch_idx + batch_size < len(available) and delay > 0:
+            print(f"    Waiting {delay}s before next batch...")
             time.sleep(delay)
 
     if not analyses:

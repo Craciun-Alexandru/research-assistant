@@ -146,6 +146,15 @@ setup.sh                     # One-time setup script
 
 For the full module map and internal design, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
+## LaTeX Metadata Extraction
+
+Between prefilter and scoring, the pipeline downloads each paper's LaTeX source from arXiv and parses it for keywords and introduction text, which the scorer uses for improved keyword matching.
+
+**Edge cases:**
+- Papers with no LaTeX source (PDF-only submissions) are skipped; no `latex_metadata` is added.
+- `\input{}`/`\include{}` directives are recursively expanded (up to depth 10).
+- Tar archive members with `..` or absolute paths are filtered to prevent path traversal.
+
 ## Development
 
 ```bash

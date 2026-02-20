@@ -1,9 +1,9 @@
 """
 Extract structured metadata from arXiv LaTeX sources.
 
-Downloads LaTeX source tarballs from arXiv, parses them for title, authors,
-keywords, abstract, and introduction text. Enriches ``filtered_papers.json``
-with a ``latex_metadata`` dict per paper.
+Downloads LaTeX source tarballs from arXiv, parses them for keywords and
+introduction text. Enriches ``filtered_papers.json`` with ``keywords`` and
+``introduction`` fields per paper.
 
 Runs between prefilter and scorer in the pipeline.
 
@@ -254,7 +254,7 @@ class LaTeXParser:
 
         Matches ``\section{Introduction}``, ``\section{1. Introduction}``, etc.
         Ends at next ``\section``, ``\bibliography``, ``\appendix``, or
-        ``\end{document}``. Truncated to 2000 characters.
+        ``\end{document}``.
         """
         # Match various intro heading formats
         match = re.search(
@@ -273,7 +273,7 @@ class LaTeXParser:
         end = start + end_match.start() if end_match else len(content)
         raw = content[start:end]
         cleaned = LaTeXParser.clean_latex(raw)
-        return cleaned[:2000]
+        return cleaned
 
     @staticmethod
     def parse(content: str, base_dir: Path) -> dict:
@@ -474,7 +474,8 @@ def main() -> None:
 
         metadata = extractor.process_paper(paper, i + 1, len(papers))
         if metadata is not None:
-            paper["latex_metadata"] = metadata
+            paper["keywords"] = metadata["keywords"]
+            paper["introduction"] = metadata["introduction"]
 
     save_json(papers, FILTERED_PAPERS_PATH)
     print(f"\nSaved enriched papers to {FILTERED_PAPERS_PATH}")
