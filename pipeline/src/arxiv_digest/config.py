@@ -14,7 +14,7 @@ from pathlib import Path
 WORKSPACE_ROOT = Path(
     os.environ.get(
         "ARXIV_DIGEST_WORKSPACE",
-        Path.home() / ".openclaw/workspaces/research-assistant",
+        str(Path(__file__).resolve().parent.parent.parent.parent),
     )
 )
 

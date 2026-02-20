@@ -10,7 +10,9 @@ def test_workspace_root_default(monkeypatch):
     import arxiv_digest.config as cfg
 
     importlib.reload(cfg)
-    expected = Path.home() / ".openclaw/workspaces/research-assistant"
+    # Default: project root, resolved from config.py's location
+    config_file = Path(cfg.__file__).resolve()
+    expected = config_file.parent.parent.parent.parent
     assert expected == cfg.WORKSPACE_ROOT
 
 

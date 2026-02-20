@@ -58,4 +58,4 @@ Run entire pipeline: python -m arxiv_digest
 
 ## Workspace Path
 
-This project lives at `~/.openclaw/workspaces/research-assistant/`. The `config.py` module resolves this as `WORKSPACE_ROOT` and all other paths derive from it.
+`config.py` resolves `WORKSPACE_ROOT` relative to the project root directory (via `Path(__file__)`). Override with the `ARXIV_DIGEST_WORKSPACE` env var for alternate deployments. All other paths derive from it.
