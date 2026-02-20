@@ -6,6 +6,7 @@ import sys
 STEPS = [
     ("fetch", "Fetching papers from arXiv"),
     ("prefilter", "Pre-filtering by keywords/categories"),
+    ("extract_latex", "Extracting LaTeX metadata"),
     ("scorer", "Scoring filtered papers"),
     ("download", "Downloading full paper texts"),
     ("reviewer", "Deep-reviewing selected papers"),

@@ -4,16 +4,17 @@ Internal design reference for contributors and Claude Code.
 
 ## Pipeline Overview
 
-The pipeline runs 7 steps sequentially:
+The pipeline runs 8 steps sequentially:
 
 ```
-fetch → prefilter → scorer → download → reviewer → digest → deliver
+fetch → prefilter → extract_latex → scorer → download → reviewer → digest → deliver
 ```
 
 | Step | Reads | Writes | Does |
 |------|-------|--------|------|
 | **fetch** | `user_preferences.json` | `daily_papers.json` | Queries arXiv API for configured categories and date range |
 | **prefilter** | `daily_papers.json`, `user_preferences.json` | `filtered_papers.json` | Deterministic keyword/category/avoidance filtering (~150 → ~50 papers) |
+| **extract_latex** | `filtered_papers.json` | `filtered_papers.json` | Downloads arXiv LaTeX source, extracts keywords and introduction text to enrich papers |
 | **scorer** | `filtered_papers.json`, `user_preferences.json` | `scored_papers_summary.json` | Hybrid deterministic + LLM scoring, selects top ~25–30 |
 | **download** | `scored_papers_summary.json` | `resources/papers/<id>.txt` | Fetches full text (HTML preferred, PDF fallback) and extracts to plain text |
 | **reviewer** | `scored_papers_summary.json`, paper texts | `digest_YYYY-MM-DD.json` | Deep scholarly analysis via LLM, selects final 5–6 papers |
@@ -29,7 +30,7 @@ Each daily run creates a `resources/YYYY-MM-DD/` directory and updates the `reso
 | File | Location | Producer | Consumer |
 |------|----------|----------|----------|
 | `daily_papers.json` | `resources/current/` | fetch | prefilter |
-| `filtered_papers.json` | `resources/current/` | prefilter | scorer |
+| `filtered_papers.json` | `resources/current/` | prefilter, extract_latex | extract_latex, scorer |
 | `scored_papers_summary.json` | `resources/current/` | scorer | download, reviewer |
 | `digest_YYYY-MM-DD.json` | `resources/current/` | reviewer | digest |
 | `digest_YYYY-MM-DD.md` | `resources/digests/` | digest | deliver |
@@ -43,7 +44,7 @@ The scorer uses a hybrid approach to minimise API costs:
 
 **Deterministic (no LLM, instant):**
 - **Category score** (0–5): Primary category = 5 × weight, secondary = 2.5 × weight
-- **Keyword score** (0–3): Title match +2, abstract match +0.5 per keyword
+- **Keyword score** (0–3): Title match +2, LaTeX keywords +1, abstract match +0.5, LaTeX introduction +0.25 per keyword
 - **Novelty bonus** (0–1): Awarded if 2+ indicator words found (novel, theorem, proof, etc.)
 - **Avoidance penalty** (0–3): Benchmark/engineering papers without theory
 
@@ -83,6 +84,7 @@ All pipeline logic lives in `pipeline/src/arxiv_digest/`:
 | `config.py` | All paths and constants. `WORKSPACE_ROOT`, `load_llm_config()`, `load_delivery_config()`, `setup_daily_run()`, `ensure_directories()`. No other module hardcodes paths. |
 | `fetch.py` | Queries arXiv API by category and date range. Respects rate limits and deduplicates across categories. |
 | `prefilter.py` | Deterministic keyword/category/avoidance filtering. No LLM calls. |
+| `extract_latex.py` | Downloads arXiv LaTeX source tarballs, parses metadata (keywords, introduction) to enrich papers before scoring. |
 | `scorer.py` | Hybrid scoring: deterministic component + LLM interest-alignment scoring in batches. |
 | `download.py` | HTML-first full-text retrieval (ar5iv) with PDF fallback (PyMuPDF). Extracts to plain text. Maintains `download_metadata.json` cache. |
 | `reviewer.py` | Per-paper deep scholarly analysis via LLM. Selects a diverse final set of 5–6 papers. |
@@ -93,7 +95,7 @@ All pipeline logic lives in `pipeline/src/arxiv_digest/`:
 | `onboard.py` | Interactive preference wizard. Uses multi-turn LLM chat to build `user_preferences.json`. Run with `python -m arxiv_digest.onboard`. |
 | `utils.py` | Shared helpers: JSON I/O (`load_json`, `save_json`), keyword extraction. |
 | `llm/` | Provider abstraction — see [LLM Abstraction Layer](#llm-abstraction-layer). |
-| `__main__.py` | Entry point for `python -m arxiv_digest`. Runs all 7 steps sequentially. |
+| `__main__.py` | Entry point for `python -m arxiv_digest`. Runs all 8 steps sequentially. |
 
 ## Design Decisions
 
@@ -120,6 +122,7 @@ All pipeline logic lives in `pipeline/src/arxiv_digest/`:
 │   │   ├── config.py                 # Paths, constants, load_llm_config()
 │   │   ├── fetch.py                  # arXiv API fetch
 │   │   ├── prefilter.py              # Keyword/category pre-filter
+│   │   ├── extract_latex.py           # LaTeX source metadata extractor
 │   │   ├── scorer.py                 # Hybrid scorer (deterministic + LLM)
 │   │   ├── download.py               # HTML/PDF downloader + text extraction
 │   │   ├── reviewer.py               # Deep reviewer (full-text LLM analysis)
@@ -142,6 +145,7 @@ All pipeline logic lives in `pipeline/src/arxiv_digest/`:
 │       ├── test_digest.py
 │       ├── test_digest_html.py
 │       ├── test_prefilter.py
+│       ├── test_extract_latex.py
 │       └── test_scorer.py
 ├── scripts/                          # Thin shell wrappers for cron
 │   ├── fetch_prefilter.sh

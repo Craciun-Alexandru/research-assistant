@@ -47,6 +47,7 @@ resources/            # Data directory (papers, digests, JSON intermediates)
 
 ```
 fetch_papers (arXiv API) → prefilter (keyword/category match)
+  → extract_latex (LaTeX metadata)
   → scorer (LLM — configurable: Gemini Flash or Claude Haiku)
   → download (HTML→TXT, PDF→TXT fallback)
   → reviewer (LLM — configurable: Gemini Pro or Claude Sonnet)

@@ -44,17 +44,26 @@ def calculate_category_score(paper: dict, user_areas: dict) -> float:
 def calculate_keyword_score(paper: dict, all_keywords: set[str]) -> float:
     """Keyword presence score (0-3).
 
-    Title match +2, abstract match +0.5 per keyword.
+    Title match +2, LaTeX keywords +1, abstract match +0.5,
+    LaTeX introduction +0.25 per keyword. Each keyword counted once
+    at its highest-value match.
     """
     title_lower = paper.get("title", "").lower()
     abstract_lower = paper.get("abstract", "").lower()
+    latex_meta = paper.get("latex_metadata", {})
+    latex_keywords_lower = " ".join(latex_meta.get("keywords", [])).lower()
+    latex_intro_lower = latex_meta.get("introduction", "").lower()
 
     score = 0.0
     for kw in all_keywords:
         if kw in title_lower:
             score += 2
+        elif kw in latex_keywords_lower:
+            score += 1.0
         elif kw in abstract_lower:
             score += 0.5
+        elif kw in latex_intro_lower:
+            score += 0.25
     return min(score, 3.0)
 
 
@@ -134,6 +143,9 @@ def _build_interest_prompt(batch: list[dict], interests: list[str]) -> str:
         papers_text += (
             f"\n---\narxiv_id: {p['arxiv_id']}\nTitle: {p['title']}\nAbstract: {abstract_snippet}\n"
         )
+        latex_meta = p.get("latex_metadata", {})
+        if latex_meta.get("keywords"):
+            papers_text += f"Keywords: {', '.join(latex_meta['keywords'])}\n"
 
     return (
         "You are an academic paper relevance scorer.\n\n"
