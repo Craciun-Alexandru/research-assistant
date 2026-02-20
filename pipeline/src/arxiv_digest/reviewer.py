@@ -2,7 +2,7 @@
 Deep reviewer: full-text analysis of top-scored papers via LLM.
 
 Replaces the OpenClaw deep-reviewer agent. Reads full paper texts, generates
-scholarly analyses, then selects a diverse final set of 5-6 papers for the
+scholarly analyses, then selects a diverse final set of 2-3 papers for the
 daily digest.
 
 Usage:
@@ -167,7 +167,7 @@ def select_papers(
     llm_client: LLMClient,
     *,
     model: str | None = None,
-    target_count: int = 6,
+    target_count: int = 3,
 ) -> tuple[list[str], str]:
     """Ask the LLM to pick the final diverse set of papers.
 
@@ -189,7 +189,7 @@ def review_papers(
     *,
     model: str | None = None,
     delay: int = 60,
-    target_selected: int = 6,
+    target_selected: int = 3,
     batch_size: int = 5,
 ) -> dict:
     """Deep-review scored papers and produce the digest JSON.
@@ -314,8 +314,8 @@ def main() -> None:
     parser.add_argument(
         "--target-selected",
         type=int,
-        default=6,
-        help="Number of papers to select for digest (default: 6)",
+        default=3,
+        help="Number of papers to select for digest (default: 3)",
     )
     args = parser.parse_args()
 
