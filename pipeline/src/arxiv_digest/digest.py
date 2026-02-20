@@ -168,11 +168,6 @@ def main():
     size = output_path.stat().st_size
     print(f"✓ File size: {size:,} bytes")
 
-    # Check if it's too large for Discord (8000 char limit per message)
-    if size > 7000:
-        print("\n⚠️  Warning: File may be too large for a single Discord message")
-        print("   Consider splitting or using file attachment")
-
     # Generate HTML version for email delivery
     from arxiv_digest.digest_html import generate_html
 

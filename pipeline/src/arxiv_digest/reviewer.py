@@ -1,9 +1,8 @@
 """
 Deep reviewer: full-text analysis of top-scored papers via LLM.
 
-Replaces the OpenClaw deep-reviewer agent. Reads full paper texts, generates
-scholarly analyses, then selects a diverse final set of 2-3 papers for the
-daily digest.
+Reads full paper texts, generates scholarly analyses, then selects a diverse
+final set of 2-3 papers for the daily digest.
 
 Usage:
     python -m arxiv_digest.reviewer

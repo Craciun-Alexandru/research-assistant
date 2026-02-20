@@ -1,8 +1,8 @@
 """
 Quick-scorer: deterministic + LLM hybrid scoring of pre-filtered papers.
 
-Replaces the OpenClaw quick-scorer agent. Scores ~150 papers and selects
-the top 25-30 (score >= 7) for downstream deep review.
+Scores ~150 papers and selects the top 25-30 (score >= 7) for downstream
+deep review.
 
 Usage:
     python -m arxiv_digest.scorer
