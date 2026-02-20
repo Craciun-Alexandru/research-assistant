@@ -492,42 +492,33 @@ mkdir -p "$WORKSPACE/resources/digests"
 echo "Directories ready."
 echo
 
-# ── 5. Cron jobs ────────────────────────────────────────────────────
+# ── 5. Cron job ─────────────────────────────────────────────────────
 
-echo "── Step 5: Cron jobs ──"
+echo "── Step 5: Cron job ──"
 echo
-echo "The daily pipeline runs via cron at these times:"
-echo "  07:00  fetch + prefilter"
-echo "  07:05  score papers (LLM scorer)"
-echo "  07:10  download full texts"
-echo "  07:20  deep review (LLM reviewer)"
-echo "  07:59  digest + deliver"
+echo "The daily pipeline runs via a single cron job at 07:00."
 echo
 
-printf "Install cron jobs? [y/N] "
+printf "Install cron job? [y/N] "
 read -r INSTALL_CRON || true
 case "$INSTALL_CRON" in
     [yY]*)
         # Build cron block
         CRON_BLOCK="# ── arXiv Digest Pipeline ──
-00 07 * * * \"$SCRIPTS/fetch_prefilter.sh\"
-05 07 * * * \"$SCRIPTS/score_papers.sh\"
-10 07 * * * \"$SCRIPTS/download_papers.sh\"
-20 07 * * * \"$SCRIPTS/review_papers.sh\"
-59 07 * * * \"$SCRIPTS/digest_deliver.sh\"
+00 07 * * * \"$SCRIPTS/run_pipeline.sh\"
 # ── End arXiv Digest Pipeline ──"
 
         # Remove any existing arXiv digest entries, then append
         EXISTING_CRON=$(crontab -l 2>/dev/null || true)
-        CLEANED_CRON=$(echo "$EXISTING_CRON" | sed '/# ── arXiv Digest Pipeline/,/# ── End arXiv Digest Pipeline/d' | sed '/arxiv_digest\|fetch_prefilter\|score_papers\|download_papers\|review_papers\|digest_deliver/d')
+        CLEANED_CRON=$(echo "$EXISTING_CRON" | sed '/# ── arXiv Digest Pipeline/,/# ── End arXiv Digest Pipeline/d' | sed '/arxiv_digest\|fetch_prefilter\|score_papers\|download_papers\|review_papers\|digest_deliver\|run_pipeline/d')
 
         # Write new crontab
         echo "$CLEANED_CRON
 $CRON_BLOCK" | crontab -
-        echo "Cron jobs installed."
+        echo "Cron job installed."
         ;;
     *)
-        echo "Skipped. You can install them later by running:"
+        echo "Skipped. You can install it later by running:"
         echo "  crontab -e"
         ;;
 esac
@@ -540,18 +531,10 @@ echo "  Setup complete!"
 echo "========================================"
 echo
 echo "To run the pipeline manually:"
-echo "  cd $PIPELINE"
-echo "  . .venv/bin/activate"
-echo "  python -m arxiv_digest.fetch"
-echo "  python -m arxiv_digest.prefilter"
-echo "  python -m arxiv_digest.scorer"
-echo "  python -m arxiv_digest.download"
-echo "  python -m arxiv_digest.reviewer --delay 5"
-echo "  python -m arxiv_digest.digest"
-echo "  python -m arxiv_digest.deliver"
-echo "  python -m arxiv_digest.deliver_email   # email only"
+echo "  $SCRIPTS/run_pipeline.sh"
+echo
+echo "Or directly:"
+echo "  cd $PIPELINE && . .venv/bin/activate && python -m arxiv_digest"
 echo
 echo "To re-run the preference wizard:"
 echo "  $VENV_PYTHON -m arxiv_digest.onboard"
-echo
-echo "Or use the shell scripts in scripts/."
