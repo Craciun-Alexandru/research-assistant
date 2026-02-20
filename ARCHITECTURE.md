@@ -88,10 +88,8 @@ All pipeline logic lives in `pipeline/src/arxiv_digest/`:
 | `scorer.py` | Hybrid scoring: deterministic component + LLM interest-alignment scoring in batches. |
 | `download.py` | LaTeX source download and body text extraction. Strips preamble and appendices before writing plain text. Maintains `download_metadata.json` cache. |
 | `reviewer.py` | Per-paper deep scholarly analysis via LLM. Selects a diverse final set of 5–6 papers. |
-| `digest.py` | Converts review JSON into formatted Markdown. Also produces HTML via `digest_html.py`. |
-| `digest_html.py` | Converts review JSON into formatted HTML for email delivery. Inline CSS, paper cards, score badges. |
-| `deliver.py` | Email delivery entry point: validates HTML path and delegates to `deliver_email_digest()`. |
-| `deliver_email.py` | Email delivery via stdlib `smtplib` + `email.mime`. SMTP with STARTTLS, multipart/alternative (text + HTML). |
+| `digest.py` | Converts review JSON into Markdown and HTML. `generate_markdown()` produces the plain-text digest; `generate_html()` produces the styled email body. |
+| `deliver.py` | Email delivery via stdlib `smtplib` + `email.mime`. Builds a multipart/alternative message (Markdown + HTML) and sends via SMTP with STARTTLS. |
 | `onboard.py` | Interactive preference wizard. Uses multi-turn LLM chat to build `user_preferences.json`. Run with `python -m arxiv_digest.onboard`. |
 | `utils.py` | Shared helpers: JSON I/O (`load_json`, `save_json`), keyword extraction. |
 | `llm/` | Provider abstraction — see [LLM Abstraction Layer](#llm-abstraction-layer). |
@@ -126,10 +124,8 @@ All pipeline logic lives in `pipeline/src/arxiv_digest/`:
 │   │   ├── scorer.py                 # Hybrid scorer (deterministic + LLM)
 │   │   ├── download.py               # LaTeX source downloader + body text extraction
 │   │   ├── reviewer.py               # Deep reviewer (full-text LLM analysis)
-│   │   ├── digest.py                 # JSON → Markdown formatter (also triggers HTML)
-│   │   ├── digest_html.py            # JSON → HTML formatter (for email)
-│   │   ├── deliver.py                # Delivery entry point (email)
-│   │   ├── deliver_email.py          # Email delivery via smtplib
+│   │   ├── digest.py                 # JSON → Markdown + HTML formatter
+│   │   ├── deliver.py                # Email delivery via smtplib
 │   │   ├── onboard.py                # Interactive preference wizard
 │   │   ├── utils.py                  # Shared helpers (JSON I/O, keywords)
 │   │   └── llm/                      # LLM client abstraction
@@ -141,7 +137,6 @@ All pipeline logic lives in `pipeline/src/arxiv_digest/`:
 │       ├── conftest.py
 │       ├── test_config.py
 │       ├── test_deliver.py
-│       ├── test_deliver_email.py
 │       ├── test_digest.py
 │       ├── test_digest_html.py
 │       ├── test_prefilter.py

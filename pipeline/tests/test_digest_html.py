@@ -1,6 +1,6 @@
-"""Tests for arxiv_digest.digest_html HTML formatting functions."""
+"""Tests for HTML formatting functions in arxiv_digest.digest."""
 
-from arxiv_digest.digest_html import _score_color, generate_html
+from arxiv_digest.digest import _score_color, generate_html
 
 
 def test_html_document_structure(sample_digest):
