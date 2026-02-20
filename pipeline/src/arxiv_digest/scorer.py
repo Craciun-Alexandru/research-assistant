@@ -148,13 +148,20 @@ def _build_interest_prompt(batch: list[dict], interests: list[str], research_are
 
     return (
         f"{build_persona(interests, research_areas)}\n\n"
-        "User research interests:\n"
+        "Your task is to score each paper's relevance to a researcher's stated interests using a strict 3-point scale.\n\n"
+        "## User research interests:\n"
         f"{interests_text}\n\n"
-        "Papers to score:\n"
+        "## Scoring Rubric - apply this literally\n\n"
+        '2 — Strong match: The paper directly and explicitly addresses one or more stated interests. A score of 2 means a reader would immediately think "this is exactly what I work on." Assign 2 sparingly; when in doubt between 1 and 2, assign 1.\n\n'
+        "1 — Partial match: The paper touches related themes, uses overlapping techniques, or produces results that are likely useful context — but does not directly address a stated interest. A paper on a prerequisite topic or a closely adjacent method scores 1.\n\n"
+        "0 — No match: The connection to the stated interests is absent or too tenuous to be actionable. Default to 0 when uncertain. False positives are more costly than false negatives.\n\n"
+        "## Calibration\n"
+        "- Do not raise a score because the paper seems high-quality or well-known.\n"
+        "- Do not raise a score because the topic is fashionable.\n"
+        "- Most arXiv batches are broad; expect only a minority of papers (roughly 20–40%) to score ≥ 1.\n\n"
+        "## Papers to score:\n"
         f"{papers_text}\n\n"
-        "For each paper, score how well it aligns with the user's research interests.\n"
-        "Score: 0 (no match), 1 (partial match), or 2 (strong match).\n"
-        "Return JSON with a 'scores' array containing objects with 'arxiv_id' and 'score' fields."
+        'Return a JSON object. The "scores" array must contain one entry per paper, each with "arxiv_id" (string) and "score" (integer: 0, 1, or 2). Do not omit any paper.'
     )
 
 
