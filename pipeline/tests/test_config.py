@@ -54,7 +54,7 @@ def test_setup_daily_run(monkeypatch, tmp_path):
 
 
 def test_load_delivery_config_default_no_key(monkeypatch, tmp_path):
-    """No delivery key in prefs → defaults to discord with DISCORD_USER_ID."""
+    """No delivery key in prefs → returns email defaults."""
     monkeypatch.setenv("ARXIV_DIGEST_WORKSPACE", str(tmp_path))
     import arxiv_digest.config as cfg
 
@@ -64,8 +64,7 @@ def test_load_delivery_config_default_no_key(monkeypatch, tmp_path):
     cfg.USER_PREFERENCES_PATH.write_text(json.dumps(prefs))
 
     config = cfg.load_delivery_config()
-    assert config["method"] == "discord"
-    assert config["discord"]["user_id"] == cfg.DISCORD_USER_ID
+    assert "email" in config
     assert config["email"]["smtp_host"] == ""
 
 
@@ -78,7 +77,6 @@ def test_load_delivery_config_email(monkeypatch, tmp_path):
 
     prefs = {
         "delivery": {
-            "method": "email",
             "email": {
                 "smtp_host": "smtp.gmail.com",
                 "smtp_port": 587,
@@ -92,13 +90,12 @@ def test_load_delivery_config_email(monkeypatch, tmp_path):
     cfg.USER_PREFERENCES_PATH.write_text(json.dumps(prefs))
 
     config = cfg.load_delivery_config()
-    assert config["method"] == "email"
     assert config["email"]["smtp_host"] == "smtp.gmail.com"
     assert config["email"]["to_address"] == "me@gmail.com"
 
 
 def test_load_delivery_config_missing_prefs(monkeypatch, tmp_path):
-    """Missing prefs file returns defaults."""
+    """Missing prefs file returns email defaults."""
     monkeypatch.setenv("ARXIV_DIGEST_WORKSPACE", str(tmp_path))
     import arxiv_digest.config as cfg
 
@@ -108,5 +105,5 @@ def test_load_delivery_config_missing_prefs(monkeypatch, tmp_path):
     cfg.USER_PREFERENCES_PATH.unlink(missing_ok=True)
 
     config = cfg.load_delivery_config()
-    assert config["method"] == "discord"
+    assert "email" in config
     assert config["email"]["smtp_port"] == 587

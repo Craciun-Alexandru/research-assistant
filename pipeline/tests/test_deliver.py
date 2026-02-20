@@ -1,44 +1,54 @@
-"""Tests for arxiv_digest.deliver split_markdown function."""
+"""Tests for arxiv_digest.deliver module."""
 
-from arxiv_digest.deliver import split_markdown
+from unittest.mock import MagicMock, patch
 
-MAX = 100
+from arxiv_digest.deliver import deliver_all
 
-
-def test_split_markdown_short_content():
-    content = "Short content"
-    chunks = split_markdown(content, max_length=MAX)
-    assert len(chunks) == 1
-    assert chunks[0] == "Short content"
-
-
-def test_split_markdown_splits_on_delimiter():
-    content = "Section one\n---\nSection two\n---\nSection three"
-    chunks = split_markdown(content, max_length=MAX)
-    assert len(chunks) >= 2
+EMAIL_CONFIG = {
+    "email": {
+        "smtp_host": "smtp.test.com",
+        "smtp_port": 587,
+        "smtp_user": "",
+        "smtp_password": "",
+        "from_address": "",
+        "to_address": "",
+    }
+}
 
 
-def test_split_markdown_each_chunk_within_limit():
-    # Build content with sections that individually fit
-    sections = [f"Section {i}: some text here." for i in range(10)]
-    content = "\n---\n".join(sections)
-    chunks = split_markdown(content, max_length=MAX)
-    for chunk in chunks:
-        assert len(chunk) <= MAX
+def test_deliver_all_returns_false_when_html_path_is_none(tmp_path):
+    md = tmp_path / "digest.md"
+    md.write_text("# Digest")
+    assert deliver_all(md, None, EMAIL_CONFIG) is False
 
 
-def test_split_markdown_long_chunk_subdivided():
-    # A single section longer than max_length should be split further
-    long_section = "A" * 60 + "\n\n" + "B" * 60
-    content = long_section  # no --- delimiter, single section > MAX
-    chunks = split_markdown(content, max_length=MAX)
-    assert len(chunks) >= 2
-    for chunk in chunks:
-        assert len(chunk) <= MAX
+def test_deliver_all_returns_false_when_html_path_missing(tmp_path):
+    md = tmp_path / "digest.md"
+    md.write_text("# Digest")
+    html = tmp_path / "digest.html"  # intentionally not created
+    assert deliver_all(md, html, EMAIL_CONFIG) is False
 
 
-def test_split_markdown_empty_sections_removed():
-    content = "Section one\n---\n\n---\nSection two"
-    chunks = split_markdown(content, max_length=MAX)
-    # Empty sections between consecutive --- should not produce empty chunks
-    assert all(chunk.strip() for chunk in chunks)
+def test_deliver_all_propagates_true_from_email(tmp_path):
+    md = tmp_path / "digest.md"
+    md.write_text("# Digest")
+    html = tmp_path / "digest.html"
+    html.write_text("<html></html>")
+    mock_fn = MagicMock(return_value=True)
+    mock_module = MagicMock(deliver_email_digest=mock_fn)
+    with patch.dict("sys.modules", {"arxiv_digest.deliver_email": mock_module}):
+        result = deliver_all(md, html, EMAIL_CONFIG)
+    assert result is True
+    mock_fn.assert_called_once_with(html, md, EMAIL_CONFIG["email"])
+
+
+def test_deliver_all_propagates_false_from_email(tmp_path):
+    md = tmp_path / "digest.md"
+    md.write_text("# Digest")
+    html = tmp_path / "digest.html"
+    html.write_text("<html></html>")
+    mock_fn = MagicMock(return_value=False)
+    mock_module = MagicMock(deliver_email_digest=mock_fn)
+    with patch.dict("sys.modules", {"arxiv_digest.deliver_email": mock_module}):
+        result = deliver_all(md, html, EMAIL_CONFIG)
+    assert result is False
